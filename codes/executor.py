@@ -177,24 +177,19 @@ class DockerExecutor(BaseExecutor):
     Executes code inside a Docker container with optional NVIDIA GPU support.
 
     Env vars (all optional):
-        DOCKER_IMAGE            Image to use (default: paper2code-sandbox:latest)
+        DOCKER_IMAGE            Image to use (default: python:3.11-slim)
         DOCKER_ENABLE_GPU       "1" to pass --gpus all (requires nvidia-docker)
-        DOCKER_EXTRA_FLAGS      Space-separated extra docker run flags
-
-    TODO(phase-1): Implement container lifecycle — pull/build image if missing,
-        mount cwd as read-only input + writable /output volume, run cmd,
-        capture logs, force-remove container on exit/timeout.
-    TODO(phase-1): Add GPU passthrough conditional on DOCKER_ENABLE_GPU and
-        nvidia-smi availability at startup.
-    TODO(phase-1): Add container resource caps: --memory, --cpus flags from env.
-    TODO(phase-1): Handle image build from a Dockerfile in repo root/docker/
-        that includes PyTorch + CUDA base image.
+        DOCKER_CPUS             Float value representing max CPU cores (e.g. 2.0)
+        EXECUTOR_MEMORY_MB      Memory limit in MB (e.g. 512)
+        EXECUTOR_TIMEOUT_SECS   Hard kill timeout per run (default: 120)
     """
 
     def __init__(self) -> None:
-        self.image = os.environ.get("DOCKER_IMAGE", "paper2code-sandbox:latest")
+        self.image = os.environ.get("DOCKER_IMAGE", "python:3.11-slim")
         self.enable_gpu = os.environ.get("DOCKER_ENABLE_GPU", "0") == "1"
         self.timeout_secs = int(os.environ.get("EXECUTOR_TIMEOUT_SECS", "120"))
+        self.memory_mb = int(os.environ.get("EXECUTOR_MEMORY_MB", "0"))
+        self.cpus = float(os.environ.get("DOCKER_CPUS", "0.0"))
 
     def run(
         self,
@@ -203,10 +198,143 @@ class DockerExecutor(BaseExecutor):
         timeout: int | None = None,
         env: dict[str, str] | None = None,
     ) -> ExecutionResult:
-        # TODO(phase-1): Replace this stub with real Docker implementation.
-        raise NotImplementedError(
-            "DockerExecutor is not yet implemented. "
-            "Set EXECUTOR_TYPE=subprocess in .env to use the subprocess executor."
+        import docker
+
+        effective_timeout = timeout if timeout is not None else self.timeout_secs
+        cmd_list = list(cmd)
+        t0 = time.monotonic()
+        timed_out = False
+
+        # Ensure we have absolute path
+        abs_cwd = os.path.abspath(cwd)
+
+        # Get docker client
+        try:
+            client = docker.from_env()
+        except Exception as exc:
+            return ExecutionResult(
+                stdout="",
+                stderr=f"[executor] Failed to connect to Docker daemon: {exc}",
+                returncode=-1,
+                timed_out=False,
+                elapsed_seconds=0.0,
+                cmd=cmd_list,
+                cwd=cwd,
+            )
+
+        # Pull/get image
+        try:
+            client.images.get(self.image)
+        except docker.errors.ImageNotFound:
+            try:
+                print(f"[executor] Pulling docker image: {self.image}...")
+                client.images.pull(self.image)
+            except Exception as exc:
+                return ExecutionResult(
+                    stdout="",
+                    stderr=f"[executor] Failed to pull docker image '{self.image}': {exc}",
+                    returncode=-1,
+                    timed_out=False,
+                    elapsed_seconds=0.0,
+                    cmd=cmd_list,
+                    cwd=cwd,
+                )
+        except Exception as exc:
+            return ExecutionResult(
+                stdout="",
+                stderr=f"[executor] Error checking docker image '{self.image}': {exc}",
+                returncode=-1,
+                timed_out=False,
+                elapsed_seconds=0.0,
+                cmd=cmd_list,
+                cwd=cwd,
+            )
+
+        # Build run options
+        run_kwargs = {
+            "image": self.image,
+            "command": cmd_list,
+            "working_dir": "/workspace",
+            "volumes": {abs_cwd: {"bind": "/workspace", "mode": "rw"}},
+            "environment": {**os.environ, **(env or {})},
+            "detach": True,
+        }
+
+        # Resource limits
+        if self.memory_mb > 0:
+            run_kwargs["mem_limit"] = self.memory_mb * 1024 * 1024
+        if self.cpus > 0.0:
+            run_kwargs["nano_cpus"] = int(self.cpus * 1e9)
+
+        # GPU request setup
+        device_requests = None
+        if self.enable_gpu:
+            try:
+                device_requests = [
+                    docker.types.DeviceRequest(count=-1, capabilities=[["gpu"]])
+                ]
+                run_kwargs["device_requests"] = device_requests
+            except Exception as exc:
+                print(f"[executor] Failed to setup GPU device request: {exc}. Trying without GPU.")
+
+        container = None
+        try:
+            try:
+                container = client.containers.run(**run_kwargs)
+            except docker.errors.APIError as exc:
+                if device_requests is not None:
+                    # Retry without GPU
+                    print(f"[executor] Docker GPU run failed: {exc}. Retrying without GPU passthrough...")
+                    run_kwargs.pop("device_requests", None)
+                    container = client.containers.run(**run_kwargs)
+                else:
+                    raise
+
+            # Polling wait with timeout
+            while True:
+                container.reload()
+                if container.status == "exited":
+                    break
+                if time.monotonic() - t0 > effective_timeout:
+                    timed_out = True
+                    break
+                time.sleep(0.2)
+
+            if timed_out:
+                try:
+                    container.kill()
+                except Exception:
+                    pass
+                returncode = -1
+                stdout = ""
+                stderr = f"\n[executor] Process killed after {effective_timeout}s timeout."
+            else:
+                result_dict = container.wait()
+                returncode = result_dict.get("StatusCode", -1)
+                stdout = container.logs(stdout=True, stderr=False).decode("utf-8", errors="replace")
+                stderr = container.logs(stdout=False, stderr=True).decode("utf-8", errors="replace")
+
+        except Exception as exc:
+            returncode = -1
+            stdout = ""
+            stderr = f"[executor] Unexpected error running Docker container: {exc}"
+
+        finally:
+            if container is not None:
+                try:
+                    container.remove(force=True)
+                except Exception:
+                    pass
+
+        elapsed = time.monotonic() - t0
+        return ExecutionResult(
+            stdout=stdout,
+            stderr=stderr,
+            returncode=returncode,
+            timed_out=timed_out,
+            elapsed_seconds=round(elapsed, 3),
+            cmd=cmd_list,
+            cwd=cwd,
         )
 
 
