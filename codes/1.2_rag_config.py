@@ -1,9 +1,12 @@
-import os
-import json
-import sys
 import argparse
+import json
+import os
+import sys
 
+from dotenv import load_dotenv
 from openai import OpenAI
+
+load_dotenv()
 
 try:
     from huggingface_hub import HfApi
@@ -26,18 +29,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--gpt_version",
         type=str,
-        default="gpt-4.1-mini",
-        help="OpenAI chat model name used for name detection.",
+        default=os.environ.get("LLM_MODEL", "MiniMax-M2.7"),
+        help="Chat model used for name detection (overrides LLM_MODEL in .env).",
     )
     return parser.parse_args()
 
 
 args = parse_args()
-client = OpenAI(api_key = os.environ["OPENAI_API_KEY"])
-
-planning_config_path = os.path.join(
-    args.output_dir, f"planning_config.yaml"
+client = OpenAI(
+    api_key=os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY", ""),
+    base_url=os.environ.get("LLM_BASE_URL") or None,
 )
+
+planning_config_path = os.path.join(args.output_dir, "planning_config.yaml")
 if not os.path.exists(planning_config_path):
     print(f"❌ Planning config not found: {planning_config_path}", file=sys.stderr)
     sys.exit(1)
@@ -144,7 +148,7 @@ else:
 # 3. Replace names in the config with refined Hugging Face ids
 # ---------------------------------------------------------
 refined_config_yaml = config_yaml
-for name, refine_name in zip(detect_lst, refine_lst):
+for name, refine_name in zip(detect_lst, refine_lst, strict=True):
     if name != refine_name:
         print(f"{name} --> {refine_name}")
         refined_config_yaml = refined_config_yaml.replace(name, refine_name)

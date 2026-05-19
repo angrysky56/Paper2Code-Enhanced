@@ -1,23 +1,33 @@
-from openai import OpenAI
-import json
-from tqdm import tqdm
 import argparse
+import json
 import os
 import sys
-from utils import print_response, print_log_cost, load_accumulated_cost, save_accumulated_cost
+
+from dotenv import load_dotenv
+from openai import OpenAI
+from utils import print_log_cost, print_response, save_accumulated_cost
+
+load_dotenv()
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--paper_name',type=str)
-parser.add_argument('--gpt_version',type=str)
-parser.add_argument('--paper_format',type=str, default="JSON", choices=["JSON", "LaTeX"])
-parser.add_argument('--pdf_json_path', type=str) # json format
-parser.add_argument('--pdf_latex_path', type=str) # latex format
-parser.add_argument('--output_dir',type=str, default="")
+parser.add_argument("--paper_name", type=str)
+parser.add_argument(
+    "--gpt_version", type=str, default=os.environ.get("LLM_MODEL", "MiniMax-M2.7")
+)
+parser.add_argument(
+    "--paper_format", type=str, default="JSON", choices=["JSON", "LaTeX"]
+)
+parser.add_argument("--pdf_json_path", type=str)  # json format
+parser.add_argument("--pdf_latex_path", type=str)  # latex format
+parser.add_argument("--output_dir", type=str, default="")
 
-args    = parser.parse_args()
+args = parser.parse_args()
 
-client = OpenAI(api_key = os.environ["OPENAI_API_KEY"])
+client = OpenAI(
+    api_key=os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY", ""),
+    base_url=os.environ.get("LLM_BASE_URL") or None,
+)
 
 paper_name = args.paper_name
 gpt_version = args.gpt_version
@@ -28,32 +38,36 @@ output_dir = args.output_dir
 
 
 if paper_format == "JSON":
-    with open(f'{pdf_json_path}') as f:
+    with open(f"{pdf_json_path}") as f:
         paper_content = json.load(f)
 elif paper_format == "LaTeX":
-    with open(f'{pdf_latex_path}') as f:
+    with open(f"{pdf_latex_path}") as f:
         paper_content = f.read()
 else:
-    print(f"[ERROR] Invalid paper format. Please select either 'JSON' or 'LaTeX.")
+    print("[ERROR] Invalid paper format. Please select either 'JSON' or 'LaTeX.")
     sys.exit(0)
 
 plan_msg = [
-        {'role': "system", "content": f"""You are an expert researcher and strategic planner with a deep understanding of experimental design and reproducibility in scientific research. 
-You will receive a research paper in {paper_format} format. 
+    {
+        "role": "system",
+        "content": f"""You are an expert researcher and strategic planner with a deep understanding of experimental design and reproducibility in scientific research.
+You will receive a research paper in {paper_format} format.
 Your task is to create a detailed and efficient plan to reproduce the experiments and methodologies described in the paper.
-This plan should align precisely with the paper's methodology, experimental setup, and evaluation metrics. 
+This plan should align precisely with the paper's methodology, experimental setup, and evaluation metrics.
 
 Instructions:
 
 1. Align with the Paper: Your plan must strictly follow the methods, datasets, model configurations, hyperparameters, and experimental setups described in the paper.
 2. Be Clear and Structured: Present the plan in a well-organized and easy-to-follow format, breaking it down into actionable steps.
-3. Prioritize Efficiency: Optimize the plan for clarity and practical implementation while ensuring fidelity to the original experiments."""},
-        {"role": "user",
-         "content" : f"""## Paper
+3. Prioritize Efficiency: Optimize the plan for clarity and practical implementation while ensuring fidelity to the original experiments.""",
+    },
+    {
+        "role": "user",
+        "content": f"""## Paper
 {paper_content}
 
 ## Task
-1. We want to reproduce the method described in the attached paper. 
+1. We want to reproduce the method described in the attached paper.
 2. The authors did not release any official code, so we have to plan our own implementation.
 3. Before writing any Python code, please outline a comprehensive plan that covers:
    - Key details from the paper's **Methodology**.
@@ -65,12 +79,16 @@ Instructions:
 - If something is unclear from the paper, mention it explicitly.
 
 ## Instruction
-The response should give us a strong roadmap, making it easier to write the code later."""}]
+The response should give us a strong roadmap, making it easier to write the code later.""",
+    },
+]
 
 file_list_msg = [
-        {"role": "user", "content": """Your goal is to create a concise, usable, and complete software system design for reproducing the paper's method. Use appropriate open-source libraries and keep the overall architecture simple.
-             
-Based on the plan for reproducing the paper’s main method, please design a concise, usable, and complete software system. 
+    {
+        "role": "user",
+        "content": """Your goal is to create a concise, usable, and complete software system design for reproducing the paper's method. Use appropriate open-source libraries and keep the overall architecture simple.
+
+Based on the plan for reproducing the paper’s main method, please design a concise, usable, and complete software system.
 Keep the architecture simple and make effective use of open-source libraries.
 
 -----
@@ -80,11 +98,11 @@ Keep the architecture simple and make effective use of open-source libraries.
 {
     "Implementation approach": "We will ... ,
     "File list": [
-        "main.py",  
-        "dataset_loader.py", 
-        "model.py",  
+        "main.py",
+        "dataset_loader.py",
+        "model.py",
         "trainer.py",
-        "evaluation.py" 
+        "evaluation.py"
     ],
     "Data structures and interfaces": "\nclassDiagram\n    class Main {\n        +__init__()\n        +run_experiment()\n    }\n    class DatasetLoader {\n        +__init__(config: dict)\n        +load_data() -> Any\n    }\n    class Model {\n        +__init__(params: dict)\n        +forward(x: Tensor) -> Tensor\n    }\n    class Trainer {\n        +__init__(model: Model, data: Any)\n        +train() -> None\n    }\n    class Evaluation {\n        +__init__(model: Model, data: Any)\n        +evaluate() -> dict\n    }\n    Main --> DatasetLoader\n    Main --> Trainer\n    Main --> Evaluation\n    Trainer --> Model\n",
     "Program call flow": "\nsequenceDiagram\n    participant M as Main\n    participant DL as DatasetLoader\n    participant MD as Model\n    participant TR as Trainer\n    participant EV as Evaluation\n    M->>DL: load_data()\n    DL-->>M: return dataset\n    M->>MD: initialize model()\n    M->>TR: train(model, dataset)\n    TR->>MD: forward(x)\n    MD-->>TR: predictions\n    TR-->>M: training complete\n    M->>EV: evaluate(model, dataset)\n    EV->>MD: forward(x)\n    MD-->>EV: predictions\n    EV-->>M: metrics\n",
@@ -103,14 +121,17 @@ Keep the architecture simple and make effective use of open-source libraries.
 Format: output wrapped inside [CONTENT][/CONTENT] like the format example, nothing else.
 
 ## Action
-Follow the instructions for the nodes, generate the output, and ensure it follows the format example."""}
-    ]
+Follow the instructions for the nodes, generate the output, and ensure it follows the format example.""",
+    }
+]
 
 task_list_msg = [
-        {'role': 'user', 'content': """Your goal is break down tasks according to PRD/technical design, generate a task list, and analyze task dependencies. 
+    {
+        "role": "user",
+        "content": """Your goal is break down tasks according to PRD/technical design, generate a task list, and analyze task dependencies.
 You will break down tasks, analyze dependencies.
-             
-You outline a clear PRD/technical design for reproducing the paper’s method and experiments. 
+
+You outline a clear PRD/technical design for reproducing the paper’s method and experiments.
 
 Now, let's break down tasks according to PRD/technical design, generate a task list, and analyze task dependencies.
 The Logic Analysis should not only consider the dependencies between files but also provide detailed descriptions to assist in writing the code needed to reproduce the paper.
@@ -122,7 +143,7 @@ The Logic Analysis should not only consider the dependencies between files but a
 {
     "Required packages": [
         "numpy==1.21.0",
-        "torch==1.9.0"  
+        "torch==1.9.0"
     ],
     "Required Other language third-party packages": [
         "No third-party dependencies required"
@@ -154,11 +175,11 @@ The Logic Analysis should not only consider the dependencies between files but a
         ]
     ],
     "Task list": [
-        "dataset_loader.py", 
-        "model.py",  
-        "trainer.py", 
+        "dataset_loader.py",
+        "model.py",
+        "trainer.py",
         "evaluation.py",
-        "main.py"  
+        "main.py"
     ],
     "Full API spec": "openapi: 3.0.0 ...",
     "Shared Knowledge": "Both data_preprocessing.py and trainer.py share ........",
@@ -180,14 +201,18 @@ The Logic Analysis should not only consider the dependencies between files but a
 Format: output wrapped inside [CONTENT][/CONTENT] like the format example, nothing else.
 
 ## Action
-Follow the node instructions above, generate your output accordingly, and ensure it follows the given format example."""}]
+Follow the node instructions above, generate your output accordingly, and ensure it follows the given format example.""",
+    }
+]
 
 # config
 config_msg = [
-        {'role': 'user', 'content': """You write elegant, modular, and maintainable code. Adhere to Google-style guidelines.
+    {
+        "role": "user",
+        "content": """You write elegant, modular, and maintainable code. Adhere to Google-style guidelines.
 
-Based on the paper, plan, design specified previously, follow the "Format Example" and generate the code. 
-Extract the training details from the above paper (e.g., learning rate, batch size, epochs, etc.), follow the "Format example" and generate the code. 
+Based on the paper, plan, design specified previously, follow the "Format Example" and generate the code.
+Extract the training details from the above paper (e.g., learning rate, batch size, epochs, etc.), follow the "Format example" and generate the code.
 DO NOT FABRICATE DETAILS — only use what the paper provides.
 
 You must write `config.yaml`.
@@ -210,57 +235,65 @@ training:
 -----
 
 ## Code: config.yaml
-"""
-    }]
+""",
+    }
+]
+
 
 def api_call(msg, gpt_version):
-    if "o3-mini" in gpt_version:
+    reasoning_effort = os.environ.get("LLM_REASONING_EFFORT")
+    if reasoning_effort:
         completion = client.chat.completions.create(
-            model=gpt_version, 
-            reasoning_effort="high",
-            messages=msg
+            model=gpt_version,
+            reasoning_effort=reasoning_effort,
+            messages=msg,
         )
     else:
         completion = client.chat.completions.create(
-            model=gpt_version, 
-            messages=msg
+            model=gpt_version,
+            messages=msg,
+            temperature=float(os.environ.get("LLM_TEMPERATURE", "0.5")),
         )
+    return completion
 
-    return completion 
 
 responses = []
 trajectories = []
 total_accumulated_cost = 0
 
-for idx, instruction_msg in enumerate([plan_msg, file_list_msg, task_list_msg, config_msg]):
+for idx, instruction_msg in enumerate(
+    [plan_msg, file_list_msg, task_list_msg, config_msg]
+):
     current_stage = ""
-    if idx == 0 :
-        current_stage = f"[Planning] Overall plan"
+    if idx == 0:
+        current_stage = "[Planning] Overall plan"
     elif idx == 1:
-        current_stage = f"[Planning] Architecture design"
+        current_stage = "[Planning] Architecture design"
     elif idx == 2:
-        current_stage = f"[Planning] Logic design"
+        current_stage = "[Planning] Logic design"
     elif idx == 3:
-        current_stage = f"[Planning] Configuration file generation"
+        current_stage = "[Planning] Configuration file generation"
     print(current_stage)
 
     trajectories.extend(instruction_msg)
 
     completion = api_call(trajectories, gpt_version)
-    
+
     # response
     completion_json = json.loads(completion.model_dump_json())
 
     # print and logging
     print_response(completion_json)
-    temp_total_accumulated_cost = print_log_cost(completion_json, gpt_version, current_stage, output_dir, total_accumulated_cost)
+    temp_total_accumulated_cost = print_log_cost(
+        completion_json, gpt_version, current_stage, output_dir, total_accumulated_cost
+    )
     total_accumulated_cost = temp_total_accumulated_cost
 
     responses.append(completion_json)
 
     # trajectories
     message = completion.choices[0].message
-    trajectories.append({'role': message.role, 'content': message.content})
+    trajectories.append({"role": message.role, "content": message.content})
 
 
 # save
@@ -268,8 +301,8 @@ save_accumulated_cost(f"{output_dir}/accumulated_cost.json", total_accumulated_c
 
 os.makedirs(output_dir, exist_ok=True)
 
-with open(f'{output_dir}/planning_response.json', 'w') as f:
+with open(f"{output_dir}/planning_response.json", "w") as f:
     json.dump(responses, f)
 
-with open(f'{output_dir}/planning_trajectories.json', 'w') as f:
+with open(f"{output_dir}/planning_trajectories.json", "w") as f:
     json.dump(trajectories, f)

@@ -1,11 +1,13 @@
-import os
-import json
 import argparse
+import os
 import re
 import sys
 
+from dotenv import load_dotenv
 from openai import OpenAI
-from utils import read_python_files, content_to_json, extract_planning
+from utils import content_to_json, extract_planning, read_python_files
+
+load_dotenv()
 
 
 def parse_and_apply_changes(responses, debug_dir, save_num=1):
@@ -109,8 +111,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         type=str,
-        default="o4-mini",
-        help="OpenAI chat model used for debugging.",
+        default=os.environ.get("LLM_MODEL", "MiniMax-M2.7"),
+        help="Chat model used for debugging (overrides LLM_MODEL in .env).",
     )
     parser.add_argument(
         "--save_num",
@@ -123,7 +125,10 @@ def parse_args() -> argparse.Namespace:
 
 
 args = parse_args()
-client = OpenAI(api_key = os.environ["OPENAI_API_KEY"])
+client = OpenAI(
+    api_key=os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY", ""),
+    base_url=os.environ.get("LLM_BASE_URL") or None,
+)
 
 if not os.path.exists(args.error_file_name):
     raise FileNotFoundError(f"Error file not found: {args.error_file_name}")
@@ -140,9 +145,7 @@ debug_dir = os.path.abspath(args.output_repo_dir)
 # --------------------------------------------------
 # Load planning trajectories and task list
 # --------------------------------------------------
-planning_traj_path = os.path.join(
-    output_dir, f"planning_trajectories.json"
-)
+planning_traj_path = os.path.join(output_dir, "planning_trajectories.json")
 if not os.path.exists(planning_traj_path):
     print(f"❌ Planning trajectories not found: {planning_traj_path}", file=sys.stderr)
     sys.exit(1)
@@ -172,7 +175,7 @@ if os.path.exists(config_path):
     with open(config_path, "r", encoding="utf-8") as f:
         config_yaml = f.read()
     codes += f"```yaml\n## File name: config.yaml\n{config_yaml}\n```\n\n"
-        
+
 reproduce_path = os.path.join(debug_dir, "reproduce.sh")
 if os.path.exists(reproduce_path):
     with open(reproduce_path, "r", encoding="utf-8") as f:
@@ -197,11 +200,11 @@ Guidelines:
 - When necessary, suggest best practices or improvements to prevent similar issues.
 - Show only the modified lines using a unified diff format:
 
-<<<<<<< SEARCH  
-    original line  
-=======  
-    corrected line  
->>>>>>> REPLACE  
+<<<<<<< SEARCH
+    original line
+=======
+    corrected line
+>>>>>>> REPLACE
 
 - If multiple fixes are needed, provide them sequentially with clear separation.
 - If external dependencies or environment setups are required (for example, packages, versions, file paths), specify them explicitly.
@@ -245,11 +248,13 @@ result = model(input_data)
 """,
     },
 ]
-response = client.chat.completions.create(
-    model=args.model,
-    messages=msg,
-    reasoning_effort="high",
-)
+reasoning_effort = os.environ.get("LLM_REASONING_EFFORT")
+_call_kwargs: dict = {"model": args.model, "messages": msg}
+if reasoning_effort:
+    _call_kwargs["reasoning_effort"] = reasoning_effort
+else:
+    _call_kwargs["temperature"] = float(os.environ.get("LLM_TEMPERATURE", "0.5"))
+response = client.chat.completions.create(**_call_kwargs)
 
 answer = response.choices[0].message.content
 # print("===== RAW MODEL ANSWER =====")
@@ -258,5 +263,3 @@ answer = response.choices[0].message.content
 # Use the direct API response as input to the patch applier
 responses = [answer]
 parse_and_apply_changes(responses, debug_dir, save_num=args.save_num)
-
-

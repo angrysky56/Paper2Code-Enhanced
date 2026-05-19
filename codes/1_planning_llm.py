@@ -1,27 +1,32 @@
-import json
 import argparse
+import json
 import os
 import sys
-from utils import print_response
+
 from transformers import AutoTokenizer
+from utils import print_response
 from vllm import LLM, SamplingParams
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--paper_name',type=str)
+parser.add_argument("--paper_name", type=str)
 
-parser.add_argument('--model_name',type=str, default="deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct") 
-parser.add_argument('--tp_size',type=int, default=2)
-parser.add_argument('--temperature',type=float, default=1.0)
-parser.add_argument('--max_model_len',type=int, default=128000)
+parser.add_argument(
+    "--model_name", type=str, default="deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct"
+)
+parser.add_argument("--tp_size", type=int, default=2)
+parser.add_argument("--temperature", type=float, default=1.0)
+parser.add_argument("--max_model_len", type=int, default=128000)
 
-parser.add_argument('--paper_format',type=str, default="JSON", choices=["JSON", "LaTeX"])
-parser.add_argument('--pdf_json_path', type=str) # json format
-parser.add_argument('--pdf_latex_path', type=str) # latex format
+parser.add_argument(
+    "--paper_format", type=str, default="JSON", choices=["JSON", "LaTeX"]
+)
+parser.add_argument("--pdf_json_path", type=str)  # json format
+parser.add_argument("--pdf_latex_path", type=str)  # latex format
 
-parser.add_argument('--output_dir',type=str, default="")
+parser.add_argument("--output_dir", type=str, default="")
 
-args    = parser.parse_args()
+args = parser.parse_args()
 
 paper_name = args.paper_name
 paper_format = args.paper_format
@@ -35,32 +40,36 @@ max_model_len = args.max_model_len
 temperature = args.temperature
 
 if paper_format == "JSON":
-    with open(f'{pdf_json_path}') as f:
+    with open(pdf_json_path) as f:
         paper_content = json.load(f)
 elif paper_format == "LaTeX":
-    with open(f'{pdf_latex_path}') as f:
+    with open(pdf_latex_path) as f:
         paper_content = f.read()
 else:
-    print(f"[ERROR] Invalid paper format. Please select either 'JSON' or 'LaTeX.")
+    print("[ERROR] Invalid paper format. Please select either 'JSON' or 'LaTeX.")
     sys.exit(0)
 
 plan_msg = [
-        {'role': "system", "content": f"""You are an expert researcher and strategic planner with a deep understanding of experimental design and reproducibility in scientific research. 
-You will receive a research paper in {paper_format} format. 
+    {
+        "role": "system",
+        "content": f"""You are an expert researcher and strategic planner with a deep understanding of experimental design and reproducibility in scientific research.
+You will receive a research paper in {paper_format} format.
 Your task is to create a detailed and efficient plan to reproduce the experiments and methodologies described in the paper.
-This plan should align precisely with the paper's methodology, experimental setup, and evaluation metrics. 
+This plan should align precisely with the paper's methodology, experimental setup, and evaluation metrics.
 
 Instructions:
 
 1. Align with the Paper: Your plan must strictly follow the methods, datasets, model configurations, hyperparameters, and experimental setups described in the paper.
 2. Be Clear and Structured: Present the plan in a well-organized and easy-to-follow format, breaking it down into actionable steps.
-3. Prioritize Efficiency: Optimize the plan for clarity and practical implementation while ensuring fidelity to the original experiments."""},
-        {"role": "user",
-         "content" : f"""## Paper
+3. Prioritize Efficiency: Optimize the plan for clarity and practical implementation while ensuring fidelity to the original experiments.""",
+    },
+    {
+        "role": "user",
+        "content": f"""## Paper
 {paper_content}
 
 ## Task
-1. We want to reproduce the method described in the attached paper. 
+1. We want to reproduce the method described in the attached paper.
 2. The authors did not release any official code, so we have to plan our own implementation.
 3. Before writing any Python code, please outline a comprehensive plan that covers:
    - Key details from the paper's **Methodology**.
@@ -72,12 +81,16 @@ Instructions:
 - If something is unclear from the paper, mention it explicitly.
 
 ## Instruction
-The response should give us a strong roadmap, making it easier to write the code later."""}]
+The response should give us a strong roadmap, making it easier to write the code later.""",
+    },
+]
 
 file_list_msg = [
-        {"role": "user", "content": """Your goal is to create a concise, usable, and complete software system design for reproducing the paper's method. Use appropriate open-source libraries and keep the overall architecture simple.
-             
-Based on the plan for reproducing the paper’s main method, please design a concise, usable, and complete software system. 
+    {
+        "role": "user",
+        "content": """Your goal is to create a concise, usable, and complete software system design for reproducing the paper's method. Use appropriate open-source libraries and keep the overall architecture simple.
+
+Based on the plan for reproducing the paper’s main method, please design a concise, usable, and complete software system.
 Keep the architecture simple and make effective use of open-source libraries.
 
 -----
@@ -87,11 +100,11 @@ Keep the architecture simple and make effective use of open-source libraries.
 {
     "Implementation approach": "We will ... ,
     "File list": [
-        "main.py",  
-        "dataset_loader.py", 
-        "model.py",  
+        "main.py",
+        "dataset_loader.py",
+        "model.py",
         "trainer.py",
-        "evaluation.py" 
+        "evaluation.py"
     ],
     "Data structures and interfaces": "\nclassDiagram\n    class Main {\n        +__init__()\n        +run_experiment()\n    }\n    class DatasetLoader {\n        +__init__(config: dict)\n        +load_data() -> Any\n    }\n    class Model {\n        +__init__(params: dict)\n        +forward(x: Tensor) -> Tensor\n    }\n    class Trainer {\n        +__init__(model: Model, data: Any)\n        +train() -> None\n    }\n    class Evaluation {\n        +__init__(model: Model, data: Any)\n        +evaluate() -> dict\n    }\n    Main --> DatasetLoader\n    Main --> Trainer\n    Main --> Evaluation\n    Trainer --> Model\n",
     "Program call flow": "\nsequenceDiagram\n    participant M as Main\n    participant DL as DatasetLoader\n    participant MD as Model\n    participant TR as Trainer\n    participant EV as Evaluation\n    M->>DL: load_data()\n    DL-->>M: return dataset\n    M->>MD: initialize model()\n    M->>TR: train(model, dataset)\n    TR->>MD: forward(x)\n    MD-->>TR: predictions\n    TR-->>M: training complete\n    M->>EV: evaluate(model, dataset)\n    EV->>MD: forward(x)\n    MD-->>EV: predictions\n    EV-->>M: metrics\n",
@@ -110,14 +123,17 @@ Keep the architecture simple and make effective use of open-source libraries.
 Format: output wrapped inside [CONTENT][/CONTENT] like the format example, nothing else.
 
 ## Action
-Follow the instructions for the nodes, generate the output, and ensure it follows the format example."""}
-    ]
+Follow the instructions for the nodes, generate the output, and ensure it follows the format example.""",
+    }
+]
 
 task_list_msg = [
-        {'role': 'user', 'content': """Your goal is break down tasks according to PRD/technical design, generate a task list, and analyze task dependencies. 
+    {
+        "role": "user",
+        "content": """Your goal is break down tasks according to PRD/technical design, generate a task list, and analyze task dependencies.
 You will break down tasks, analyze dependencies.
-             
-You outline a clear PRD/technical design for reproducing the paper’s method and experiments. 
+
+You outline a clear PRD/technical design for reproducing the paper’s method and experiments.
 
 Now, let's break down tasks according to PRD/technical design, generate a task list, and analyze task dependencies.
 The Logic Analysis should not only consider the dependencies between files but also provide detailed descriptions to assist in writing the code needed to reproduce the paper.
@@ -129,7 +145,7 @@ The Logic Analysis should not only consider the dependencies between files but a
 {
     "Required packages": [
         "numpy==1.21.0",
-        "torch==1.9.0"  
+        "torch==1.9.0"
     ],
     "Required Other language third-party packages": [
         "No third-party dependencies required"
@@ -161,11 +177,11 @@ The Logic Analysis should not only consider the dependencies between files but a
         ]
     ],
     "Task list": [
-        "dataset_loader.py", 
-        "model.py",  
-        "trainer.py", 
+        "dataset_loader.py",
+        "model.py",
+        "trainer.py",
         "evaluation.py",
-        "main.py"  
+        "main.py"
     ],
     "Full API spec": "openapi: 3.0.0 ...",
     "Shared Knowledge": "Both data_preprocessing.py and trainer.py share ........",
@@ -187,14 +203,18 @@ The Logic Analysis should not only consider the dependencies between files but a
 Format: output wrapped inside [CONTENT][/CONTENT] like the format example, nothing else.
 
 ## Action
-Follow the node instructions above, generate your output accordingly, and ensure it follows the given format example."""}]
+Follow the node instructions above, generate your output accordingly, and ensure it follows the given format example.""",
+    }
+]
 
 # config
 config_msg = [
-        {'role': 'user', 'content': """You write elegant, modular, and maintainable code. Adhere to Google-style guidelines.
+    {
+        "role": "user",
+        "content": """You write elegant, modular, and maintainable code. Adhere to Google-style guidelines.
 
-Based on the paper, plan, design specified previously, follow the "Format Example" and generate the code. 
-Extract the training details from the above paper (e.g., learning rate, batch size, epochs, etc.), follow the "Format example" and generate the code. 
+Based on the paper, plan, design specified previously, follow the "Format Example" and generate the code.
+Extract the training details from the above paper (e.g., learning rate, batch size, epochs, etc.), follow the "Format example" and generate the code.
 DO NOT FABRICATE DETAILS — only use what the paper provides.
 
 You must write `config.yaml`.
@@ -217,8 +237,9 @@ training:
 -----
 
 ## Code: config.yaml
-"""
-    }]
+""",
+    }
+]
 
 
 model_name = args.model_name
@@ -226,57 +247,76 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 
 if "Qwen" in model_name:
-    llm = LLM(model=model_name, 
-            tensor_parallel_size=tp_size, 
-            max_model_len=max_model_len,
-            gpu_memory_utilization=0.95,
-            trust_remote_code=True, enforce_eager=True, 
-            rope_scaling={"factor": 4.0, "original_max_position_embeddings": 32768, "type": "yarn"})
+    llm = LLM(
+        model=model_name,
+        tensor_parallel_size=tp_size,
+        max_model_len=max_model_len,
+        gpu_memory_utilization=0.95,
+        trust_remote_code=True,
+        enforce_eager=True,
+        rope_scaling={
+            "factor": 4.0,
+            "original_max_position_embeddings": 32768,
+            "type": "yarn",
+        },
+    )
     sampling_params = SamplingParams(temperature=temperature, max_tokens=131072)
 
 elif "deepseek" in model_name:
-    llm = LLM(model=model_name, 
-              tensor_parallel_size=tp_size, 
-              max_model_len=max_model_len,
-              gpu_memory_utilization=0.95,
-              trust_remote_code=True, enforce_eager=True)
-    sampling_params = SamplingParams(temperature=temperature, max_tokens=128000, stop_token_ids=[tokenizer.eos_token_id])
+    llm = LLM(
+        model=model_name,
+        tensor_parallel_size=tp_size,
+        max_model_len=max_model_len,
+        gpu_memory_utilization=0.95,
+        trust_remote_code=True,
+        enforce_eager=True,
+    )
+    sampling_params = SamplingParams(
+        temperature=temperature,
+        max_tokens=128000,
+        stop_token_ids=[tokenizer.eos_token_id],
+    )
 
 
 def run_llm(msg):
     # vllm
-    prompt_token_ids = [tokenizer.apply_chat_template(messages, add_generation_prompt=True) for messages in [msg]]
+    prompt_token_ids = [
+        tokenizer.apply_chat_template(messages, add_generation_prompt=True)
+        for messages in [msg]
+    ]
 
-    outputs = llm.generate(prompt_token_ids=prompt_token_ids, sampling_params=sampling_params)
+    outputs = llm.generate(
+        prompt_token_ids=prompt_token_ids, sampling_params=sampling_params
+    )
 
     completion = [output.outputs[0].text for output in outputs]
-    
-    return completion[0] 
+
+    return completion[0]
+
 
 responses = []
 trajectories = []
-total_accumulated_cost = 0
 
-for idx, instruction_msg in enumerate([plan_msg, file_list_msg, task_list_msg, config_msg]):
+for idx, instruction_msg in enumerate(
+    [plan_msg, file_list_msg, task_list_msg, config_msg]
+):
     current_stage = ""
-    if idx == 0 :
-        current_stage = f"[Planning] Overall plan"
+    if idx == 0:
+        current_stage = "[Planning] Overall plan"
     elif idx == 1:
-        current_stage = f"[Planning] Architecture design"
+        current_stage = "[Planning] Architecture design"
     elif idx == 2:
-        current_stage = f"[Planning] Logic design"
+        current_stage = "[Planning] Logic design"
     elif idx == 3:
-        current_stage = f"[Planning] Configuration file generation"
+        current_stage = "[Planning] Configuration file generation"
     print(current_stage)
 
     trajectories.extend(instruction_msg)
 
     completion = run_llm(trajectories)
-    
+
     # response
-    completion_json = {
-        'text': completion
-    }
+    completion_json = {"text": completion}
 
     # print and logging
     print_response(completion_json, is_llm=True)
@@ -284,14 +324,14 @@ for idx, instruction_msg in enumerate([plan_msg, file_list_msg, task_list_msg, c
     responses.append(completion_json)
 
     # trajectories
-    trajectories.append({'role': 'assistant', 'content': completion})
+    trajectories.append({"role": "assistant", "content": completion})
 
 
 # save
 os.makedirs(output_dir, exist_ok=True)
 
-with open(f'{output_dir}/planning_response.json', 'w') as f:
+with open(f"{output_dir}/planning_response.json", "w") as f:
     json.dump(responses, f)
 
-with open(f'{output_dir}/planning_trajectories.json', 'w') as f:
+with open(f"{output_dir}/planning_trajectories.json", "w") as f:
     json.dump(trajectories, f)
