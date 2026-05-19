@@ -14,14 +14,13 @@ from utils import (
     print_response,
     save_accumulated_cost,
     unified_api_call,
+    cal_cost,
 )
+from db import init_db, create_run, write_stage_result, complete_run
 
 load_dotenv()
 
-# TODO(phase-2): Uncomment when db.py is wired in:
-#   from db import init_db, write_stage_result
-#   init_db()
-#   run_id = int(os.environ.get("RUN_ID", "-1"))
+
 
 parser = argparse.ArgumentParser()
 
@@ -35,8 +34,15 @@ parser.add_argument(
 parser.add_argument("--pdf_json_path", type=str)  # json format
 parser.add_argument("--pdf_latex_path", type=str)  # latex format
 parser.add_argument("--output_dir", type=str, default="")
+parser.add_argument("--run_id", type=int, default=-1)
 
 args = parser.parse_args()
+
+# Initialize DB and create/resume run
+run_id = int(os.environ.get("RUN_ID", args.run_id))
+init_db()
+if run_id == -1:
+    run_id = create_run(paper_name=args.paper_name, model_used=args.gpt_version, output_dir=args.output_dir)
 
 # Client is managed dynamically in unified_api_call
 
@@ -210,14 +216,19 @@ for todo_file_name in tqdm(todo_file_lst):
     )
     total_accumulated_cost = temp_total_accumulated_cost
 
-    # TODO(phase-2): Write stage result to DB after each LLM call:
-    #   write_stage_result(
-    #       run_id, f"analyzing:{todo_file_name}",
-    #       success=True,
-    #       tokens_in=..., tokens_out=..., cost_usd=...,
-    #       output_path=f"{artifact_output_dir}/{todo_file_name}_simple_analysis.txt",
-    #       messages=trajectories,
-    #   )
+    # Write stage result to DB after each LLM call
+    usage = cal_cost(completion_json, gpt_version)
+    write_stage_result(
+        run_id,
+        f"analyzing:{todo_file_name}",
+        success=True,
+        tokens_in=usage["actual_input_tokens"],
+        tokens_out=usage["output_tokens"],
+        cost_usd=usage["total_cost"],
+        output_path=f"{artifact_output_dir}/{todo_file_name}_simple_analysis.txt",
+        messages=trajectories,
+        model_used=gpt_version,
+    )
 
     # save
     with open(f"{artifact_output_dir}/{todo_file_name}_simple_analysis.txt", "w") as f:
@@ -236,3 +247,5 @@ for todo_file_name in tqdm(todo_file_lst):
         json.dump(trajectories, f)
 
 save_accumulated_cost(f"{output_dir}/accumulated_cost.json", total_accumulated_cost)
+
+complete_run(run_id, status="completed")

@@ -110,3 +110,6 @@ active_env/
 # Operating System Files
 .DS_Store
 Thumbs.db
+
+# Pipeline outputs and database files
+outputs/

@@ -4,7 +4,8 @@ import re
 import sys
 
 from dotenv import load_dotenv
-from utils import content_to_json, extract_planning, read_python_files, unified_api_call
+from utils import content_to_json, extract_planning, read_python_files, unified_api_call, cal_cost
+from db import init_db, create_run, write_stage_result, write_execution_trial, complete_run
 
 try:
     from executor import get_executor
@@ -12,6 +13,7 @@ except ImportError:
     from codes.executor import get_executor
 
 load_dotenv()
+
 
 
 def parse_and_apply_changes(responses, debug_dir, save_num=1):
@@ -131,6 +133,12 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="Backup index appended as .<save_num>.bak when saving modified files.",
     )
+    parser.add_argument(
+        "--run_id",
+        type=int,
+        default=-1,
+        help="Run identifier for SQLite tracking",
+    )
     return parser.parse_args()
 
 
@@ -142,6 +150,12 @@ args = parse_args()
 # --------------------------------------------------
 output_dir = os.path.abspath(args.output_dir)
 debug_dir = os.path.abspath(args.output_repo_dir)
+
+# Initialize DB and create/resume run
+run_id = int(os.environ.get("RUN_ID", args.run_id))
+init_db()
+if run_id == -1:
+    run_id = create_run(paper_name=args.paper_name, model_used=args.model, output_dir=args.output_dir)
 
 # --------------------------------------------------
 # Initial Sandboxed Execution Check
@@ -156,8 +170,21 @@ else:
 print(f"[debugging] Running initial sandboxed execution check in {debug_dir} using cmd: {cmd}...")
 initial_res = executor.run(cmd, cwd=debug_dir)
 
+# Log initial execution check trial
+write_execution_trial(
+    run_id,
+    args.save_num * 2 - 1,
+    stdout=initial_res.stdout,
+    stderr=initial_res.stderr,
+    returncode=initial_res.returncode,
+    timed_out=initial_res.timed_out,
+    elapsed_seconds=initial_res.elapsed_seconds,
+    code_dir=debug_dir,
+)
+
 if initial_res.success:
     print("✅ Sandbox execution check succeeded! No errors found. Skipping LLM debugging.")
+    complete_run(run_id, status="completed")
     sys.exit(0)
 
 print(f"❌ Sandbox execution check failed with returncode {initial_res.returncode}. Proceeding to LLM debug.")
@@ -288,13 +315,20 @@ answer = response.choices[0].message.content
 # print("===== RAW MODEL ANSWER =====")
 # print(answer)
 
-# TODO(phase-2): Write LLM debug call to DB:
-#   write_stage_result(
-#       run_id, "debugging",
-#       success=True,
-#       tokens_in=..., tokens_out=..., cost_usd=...,
-#       messages=msg,
-#   )
+# Log LLM debug call to DB
+completion_json = json.loads(response.model_dump_json())
+usage = cal_cost(completion_json, args.model)
+write_stage_result(
+    run_id=run_id,
+    stage_name=f"debugging:save_{args.save_num}",
+    success=True,
+    tokens_in=usage["actual_input_tokens"],
+    tokens_out=usage["output_tokens"],
+    cost_usd=usage["total_cost"],
+    output_path=f"{output_dir}/debugging_response_save_{args.save_num}.json",
+    messages=msg,
+    model_used=args.model,
+)
 
 # Use the direct API response as input to the patch applier
 responses = [answer]
@@ -304,10 +338,24 @@ parse_and_apply_changes(responses, debug_dir, save_num=args.save_num)
 print(f"[debugging] Running verification sandboxed execution in {debug_dir} using cmd: {cmd}...")
 post_res = executor.run(cmd, cwd=debug_dir)
 
+# Log verification check trial
+write_execution_trial(
+    run_id,
+    args.save_num * 2,
+    stdout=post_res.stdout,
+    stderr=post_res.stderr,
+    returncode=post_res.returncode,
+    timed_out=post_res.timed_out,
+    elapsed_seconds=post_res.elapsed_seconds,
+    code_dir=debug_dir,
+)
+
 if post_res.success:
     print("✅ Sandbox verification check succeeded! Patches resolved all execution issues.")
+    complete_run(run_id, status="completed")
 else:
     print(f"❌ Sandbox verification check failed with returncode {post_res.returncode}.")
     print(f"Stdout:\n{post_res.stdout}")
     print(f"Stderr:\n{post_res.stderr}")
+    complete_run(run_id, status="failed")
     sys.exit(1)

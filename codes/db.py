@@ -71,6 +71,8 @@ def _hash_str(s: str) -> str:
 def _get_db_path() -> str:
     return os.environ.get("DB_PATH", os.path.join(os.path.dirname(__file__), "..", "outputs", "paper2code.db"))
 
+DB_PATH = _get_db_path()
+
 
 # ---------------------------------------------------------------------------
 # SQLModel table definitions
@@ -148,13 +150,12 @@ if _SQLMODEL_AVAILABLE:
 _engine = None
 
 
-def init_db() -> None:
+def init_db(quiet: bool = False) -> None:
     """
     Create the SQLite database file and all tables if they don't exist.
     Call once at startup (idempotent).
 
     TODO(phase-2): Add Alembic migration support for schema evolution
-        so existing DB files don't need to be dropped on schema changes.
     """
     if not _SQLMODEL_AVAILABLE:
         return
@@ -164,7 +165,8 @@ def init_db() -> None:
     os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
     _engine = create_engine(f"sqlite:///{db_path}", echo=False)
     SQLModel.metadata.create_all(_engine)
-    print(f"[db] Initialized: {db_path}")
+    if not quiet:
+        print(f"[db] Initialized: {db_path}")
 
 
 def get_session() -> "Session":
