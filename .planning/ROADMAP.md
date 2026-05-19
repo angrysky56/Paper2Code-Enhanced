@@ -25,8 +25,11 @@ This roadmap lays out the four key modernization phases to transition the **Pape
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
 - [ ] 01-01: Implement memory constraints in `SubprocessExecutor` using resource setrlimits
 - [ ] 01-02: Implement PyTorch/CUDA-capable containerised runtime in `DockerExecutor`
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 01-03: Wire the sandboxed executor into `4_debugging.py` replacing raw shell executions
 
 ### Phase 2: Database Persistence & RLM Logging
