@@ -6,19 +6,12 @@ import sys
 from dotenv import load_dotenv
 from utils import content_to_json, extract_planning, read_python_files, unified_api_call
 
+try:
+    from executor import get_executor
+except ImportError:
+    from codes.executor import get_executor
+
 load_dotenv()
-
-# TODO(phase-1): Replace raw error-file input with sandboxed execution output:
-#   from executor import get_executor
-#   executor = get_executor()
-#   result = executor.run(["python", "main.py"], cwd=debug_dir, timeout=int(os.environ.get("EXECUTOR_TIMEOUT_SECS", "120")))
-#   execution_error_msg = result.stderr if not result.success else ""
-#   If result.success: skip LLM debug call entirely and mark run complete.
-
-# TODO(phase-2): Uncomment when db.py is wired in:
-#   from db import init_db, write_stage_result, write_execution_trial
-#   init_db()
-#   run_id = int(os.environ.get("RUN_ID", "-1"))
 
 
 def parse_and_apply_changes(responses, debug_dir, save_num=1):
@@ -120,6 +113,12 @@ def parse_args() -> argparse.Namespace:
         help="Paper name for output_dir.",
     )
     parser.add_argument(
+        "--output_repo_dir",
+        type=str,
+        required=True,
+        help="Path to the directory containing the generated repository code to debug.",
+    )
+    parser.add_argument(
         "--model",
         type=str,
         default=os.environ.get("LLM_MODEL", "MiniMax-M2.7"),
@@ -138,17 +137,38 @@ def parse_args() -> argparse.Namespace:
 args = parse_args()
 # Client is managed dynamically in unified_api_call
 
-if not os.path.exists(args.error_file_name):
-    raise FileNotFoundError(f"Error file not found: {args.error_file_name}")
-
-with open(args.error_file_name, "r", encoding="utf-8") as f:
-    execution_error_msg = f.read()
-
 # --------------------------------------------------
 # Resolve output_dir and debug_dir
 # --------------------------------------------------
 output_dir = os.path.abspath(args.output_dir)
 debug_dir = os.path.abspath(args.output_repo_dir)
+
+# --------------------------------------------------
+# Initial Sandboxed Execution Check
+# --------------------------------------------------
+executor = get_executor()
+reproduce_path = os.path.join(debug_dir, "reproduce.sh")
+if os.path.exists(reproduce_path):
+    cmd = ["bash", "reproduce.sh"]
+else:
+    cmd = ["python", "main.py"]
+
+print(f"[debugging] Running initial sandboxed execution check in {debug_dir} using cmd: {cmd}...")
+initial_res = executor.run(cmd, cwd=debug_dir)
+
+if initial_res.success:
+    print("✅ Sandbox execution check succeeded! No errors found. Skipping LLM debugging.")
+    sys.exit(0)
+
+print(f"❌ Sandbox execution check failed with returncode {initial_res.returncode}. Proceeding to LLM debug.")
+execution_error_msg = initial_res.stderr if initial_res.stderr.strip() else initial_res.stdout
+if not execution_error_msg.strip():
+    if os.path.exists(args.error_file_name):
+        print("[debugging] Sandbox execution error message was empty. Falling back to static error file.")
+        with open(args.error_file_name, "r", encoding="utf-8") as f:
+            execution_error_msg = f.read()
+    else:
+        execution_error_msg = "Unknown execution error."
 
 # --------------------------------------------------
 # Load planning trajectories and task list
@@ -280,15 +300,14 @@ answer = response.choices[0].message.content
 responses = [answer]
 parse_and_apply_changes(responses, debug_dir, save_num=args.save_num)
 
-# TODO(phase-1): After applying patches, re-run the code via executor and log trial:
-#   result = executor.run(["python", "main.py"], cwd=debug_dir)
-#   write_execution_trial(
-#       run_id, attempt_num=args.save_num,
-#       stdout=result.stdout, stderr=result.stderr,
-#       returncode=result.returncode, timed_out=result.timed_out,
-#       elapsed_seconds=result.elapsed_seconds, code_dir=debug_dir,
-#   )
-#   if result.success:
-#       complete_run(run_id, status="completed")
-#   elif args.save_num >= MAX_DEBUG_ATTEMPTS:
-#       complete_run(run_id, status="failed")
+# Post-patch verification sandboxed execution run
+print(f"[debugging] Running verification sandboxed execution in {debug_dir} using cmd: {cmd}...")
+post_res = executor.run(cmd, cwd=debug_dir)
+
+if post_res.success:
+    print("✅ Sandbox verification check succeeded! Patches resolved all execution issues.")
+else:
+    print(f"❌ Sandbox verification check failed with returncode {post_res.returncode}.")
+    print(f"Stdout:\n{post_res.stdout}")
+    print(f"Stderr:\n{post_res.stderr}")
+    sys.exit(1)
