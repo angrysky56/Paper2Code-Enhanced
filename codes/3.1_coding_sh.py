@@ -5,7 +5,6 @@ import os
 import sys
 
 from dotenv import load_dotenv
-from openai import OpenAI
 from tqdm import tqdm
 from utils import (
     content_to_json,
@@ -16,6 +15,7 @@ from utils import (
     print_response,
     read_python_files,
     save_accumulated_cost,
+    unified_api_call,
 )
 
 load_dotenv()
@@ -35,10 +35,7 @@ parser.add_argument("--output_dir", type=str, default="")
 parser.add_argument("--output_repo_dir", type=str, default="")
 
 args = parser.parse_args()
-client = OpenAI(
-    api_key=os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY", ""),
-    base_url=os.environ.get("LLM_BASE_URL") or None,
-)
+# Client is managed dynamically in unified_api_call
 
 paper_name = args.paper_name
 gpt_version = args.gpt_version
@@ -132,20 +129,12 @@ Next, you must write only the "{todo_file_name}".
 
 
 def api_call(msg):
-    reasoning_effort = os.environ.get("LLM_REASONING_EFFORT")
-    if reasoning_effort:
-        completion = client.chat.completions.create(
-            model=gpt_version,
-            reasoning_effort=reasoning_effort,
-            messages=msg,
-        )
-    else:
-        completion = client.chat.completions.create(
-            model=gpt_version,
-            messages=msg,
-            temperature=float(os.environ.get("LLM_TEMPERATURE", "0.5")),
-        )
-    return completion
+    return unified_api_call(
+        messages=msg,
+        gpt_version=gpt_version,
+        temperature=float(os.environ.get("LLM_TEMPERATURE", "0.5")),
+        reasoning_effort=os.environ.get("LLM_REASONING_EFFORT"),
+    )
 
 
 artifact_output_dir = f"{output_dir}/coding_artifacts"

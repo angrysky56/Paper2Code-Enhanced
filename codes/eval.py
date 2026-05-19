@@ -4,7 +4,6 @@ import os
 import sys
 
 from dotenv import load_dotenv
-from openai import OpenAI
 from utils import (
     content_to_json,
     extract_json_from_string,
@@ -14,19 +13,29 @@ from utils import (
     print_log_cost,
     read_all_files,
     read_python_files,
+    unified_api_call,
 )
 
 load_dotenv()
 
-client = OpenAI(
-    api_key=os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY", ""),
-    base_url=os.environ.get("LLM_BASE_URL") or None,
-)
+# Client is managed dynamically in unified_api_call
 
 
 def api_call(request_json):
-    completion = client.chat.completions.create(**request_json)
-    return completion
+    # Extract keys and use unified_api_call
+    messages = request_json.get("messages")
+    gpt_version = request_json.get("model")
+    temperature = request_json.get("temperature", 0.5)
+    reasoning_effort = request_json.get("reasoning_effort")
+    n = request_json.get("n", 1)
+    
+    return unified_api_call(
+        messages=messages,
+        gpt_version=gpt_version,
+        temperature=temperature,
+        reasoning_effort=reasoning_effort,
+        n=n
+    )
 
 
 def main(args):

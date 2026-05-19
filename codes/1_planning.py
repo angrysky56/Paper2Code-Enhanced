@@ -4,8 +4,7 @@ import os
 import sys
 
 from dotenv import load_dotenv
-from openai import OpenAI
-from utils import print_log_cost, print_response, save_accumulated_cost
+from utils import print_log_cost, print_response, save_accumulated_cost, unified_api_call
 
 load_dotenv()
 
@@ -24,10 +23,7 @@ parser.add_argument("--output_dir", type=str, default="")
 
 args = parser.parse_args()
 
-client = OpenAI(
-    api_key=os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY", ""),
-    base_url=os.environ.get("LLM_BASE_URL") or None,
-)
+# Client is managed dynamically in unified_api_call
 
 paper_name = args.paper_name
 gpt_version = args.gpt_version
@@ -241,20 +237,12 @@ training:
 
 
 def api_call(msg, gpt_version):
-    reasoning_effort = os.environ.get("LLM_REASONING_EFFORT")
-    if reasoning_effort:
-        completion = client.chat.completions.create(
-            model=gpt_version,
-            reasoning_effort=reasoning_effort,
-            messages=msg,
-        )
-    else:
-        completion = client.chat.completions.create(
-            model=gpt_version,
-            messages=msg,
-            temperature=float(os.environ.get("LLM_TEMPERATURE", "0.5")),
-        )
-    return completion
+    return unified_api_call(
+        messages=msg,
+        gpt_version=gpt_version,
+        temperature=float(os.environ.get("LLM_TEMPERATURE", "0.5")),
+        reasoning_effort=os.environ.get("LLM_REASONING_EFFORT"),
+    )
 
 
 responses = []

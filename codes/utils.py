@@ -543,3 +543,173 @@ def get_now_str():
     now = now.split(".")[0]
     now = now.replace("-", "").replace(" ", "_").replace(":", "")
     return now  # now - "20250427_205124"
+
+
+class MockMessage:
+    def __init__(self, content, role="assistant"):
+        self.content = content
+        self.role = role
+
+
+class MockChoice:
+    def __init__(self, content, role="assistant"):
+        self.message = MockMessage(content, role)
+
+
+class MockCompletion:
+    def __init__(self, choices, model):
+        self.choices = choices
+        self.model = model
+
+    def model_dump_json(self):
+        choices_list = []
+        for idx, choice in enumerate(self.choices):
+            choices_list.append({
+                "message": {
+                    "content": choice.message.content,
+                    "role": choice.message.role
+                },
+                "finish_reason": "stop",
+                "index": idx
+            })
+        return json.dumps({
+            "choices": choices_list,
+            "model": self.model,
+            "usage": {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0
+            }
+        })
+
+
+def convert_to_anthropic_messages(messages):
+    """
+    Converts OpenAI style messages list to Anthropic format.
+    Extracts system messages into a single system prompt, and filters/alternates other messages.
+    """
+    system_parts = []
+    converted = []
+    for msg in messages:
+        role = msg.get("role")
+        content = msg.get("content", "")
+        if role == "system":
+            system_parts.append(content)
+        else:
+            if role in ["user", "assistant"]:
+                converted.append({"role": role, "content": content})
+            else:
+                converted.append({"role": "user", "content": content})
+                
+    system_prompt = "\n\n".join(system_parts) if system_parts else None
+    
+    final_messages = []
+    for msg in converted:
+        if not final_messages:
+            if msg["role"] == "assistant":
+                final_messages.append({"role": "user", "content": "Proceed."})
+            final_messages.append(msg)
+        else:
+            last_msg = final_messages[-1]
+            if last_msg["role"] == msg["role"]:
+                last_msg["content"] = last_msg["content"] + "\n\n" + msg["content"]
+            else:
+                final_messages.append(msg)
+                
+    return system_prompt, final_messages
+
+
+def unified_api_call(messages, gpt_version, temperature=0.5, reasoning_effort=None, n=1):
+    """
+    Unified API call wrapper supporting both OpenAI and Anthropic SDKs.
+    If the model name contains 'minimax' (case-insensitive), it uses the Anthropic SDK
+    via the configured ANTHROPIC_BASE_URL (or defaults to MiniMax's endpoint).
+    """
+    model_lower = gpt_version.lower() if gpt_version else ""
+    is_minimax = "minimax" in model_lower
+    
+    try:
+        import anthropic
+        has_anthropic = True
+    except ImportError:
+        has_anthropic = False
+        
+    use_anthropic = has_anthropic and (is_minimax or os.environ.get("ANTHROPIC_API_KEY") is not None)
+    
+    if use_anthropic:
+        api_key = (
+            os.environ.get("ANTHROPIC_API_KEY") 
+            or os.environ.get("LLM_API_KEY") 
+            or os.environ.get("OPENAI_API_KEY")
+        )
+        base_url = (
+            os.environ.get("ANTHROPIC_BASE_URL") 
+            or os.environ.get("LLM_BASE_URL") 
+            or "https://api.minimax.io/anthropic"
+        )
+        
+        client = anthropic.Anthropic(api_key=api_key, base_url=base_url)
+        system_prompt, converted_messages = convert_to_anthropic_messages(messages)
+        
+        kwargs = {
+            "model": gpt_version,
+            "messages": converted_messages,
+            "max_tokens": 8192,
+        }
+        if system_prompt:
+            kwargs["system"] = system_prompt
+        if temperature is not None:
+            kwargs["temperature"] = float(temperature)
+            
+        choices = []
+        for i in range(n):
+            message_response = client.messages.create(**kwargs)
+            
+            text_parts = []
+            thinking_parts = []
+            for block in message_response.content:
+                block_type = getattr(block, "type", None)
+                if block_type == "thinking":
+                    thinking_text = getattr(block, "thinking", "")
+                    thinking_parts.append(thinking_text)
+                    print(f"\n[Thinking Block (Choice {i+1})]:\n{thinking_text}\n")
+                elif block_type == "text":
+                    text_parts.append(getattr(block, "text", ""))
+                elif isinstance(block, str):
+                    text_parts.append(block)
+                elif isinstance(block, dict):
+                    b_type = block.get("type")
+                    if b_type == "thinking":
+                        t_text = block.get("thinking", "")
+                        thinking_parts.append(t_text)
+                        print(f"\n[Thinking Block (Choice {i+1})]:\n{t_text}\n")
+                    elif b_type == "text":
+                        text_parts.append(block.get("text", ""))
+            
+            final_text = "".join(text_parts)
+            if thinking_parts:
+                thinking_str = "".join(thinking_parts)
+                final_text = f"<think>\n{thinking_str}\n</think>\n\n" + final_text
+                
+            choices.append(MockChoice(final_text, role="assistant"))
+            
+        return MockCompletion(choices, gpt_version)
+    else:
+        from openai import OpenAI
+        
+        api_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
+        base_url = os.environ.get("LLM_BASE_URL") or None
+        client = OpenAI(api_key=api_key, base_url=base_url)
+        
+        kwargs = {
+            "model": gpt_version,
+            "messages": messages,
+        }
+        if reasoning_effort:
+            kwargs["reasoning_effort"] = reasoning_effort
+        elif temperature is not None:
+            kwargs["temperature"] = float(temperature)
+        if n > 1:
+            kwargs["n"] = n
+            
+        return client.chat.completions.create(**kwargs)

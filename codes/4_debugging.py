@@ -4,8 +4,7 @@ import re
 import sys
 
 from dotenv import load_dotenv
-from openai import OpenAI
-from utils import content_to_json, extract_planning, read_python_files
+from utils import content_to_json, extract_planning, read_python_files, unified_api_call
 
 load_dotenv()
 
@@ -125,10 +124,7 @@ def parse_args() -> argparse.Namespace:
 
 
 args = parse_args()
-client = OpenAI(
-    api_key=os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY", ""),
-    base_url=os.environ.get("LLM_BASE_URL") or None,
-)
+# Client is managed dynamically in unified_api_call
 
 if not os.path.exists(args.error_file_name):
     raise FileNotFoundError(f"Error file not found: {args.error_file_name}")
@@ -249,12 +245,12 @@ result = model(input_data)
     },
 ]
 reasoning_effort = os.environ.get("LLM_REASONING_EFFORT")
-_call_kwargs: dict = {"model": args.model, "messages": msg}
-if reasoning_effort:
-    _call_kwargs["reasoning_effort"] = reasoning_effort
-else:
-    _call_kwargs["temperature"] = float(os.environ.get("LLM_TEMPERATURE", "0.5"))
-response = client.chat.completions.create(**_call_kwargs)
+response = unified_api_call(
+    messages=msg,
+    gpt_version=args.model,
+    temperature=float(os.environ.get("LLM_TEMPERATURE", "0.5")) if not reasoning_effort else None,
+    reasoning_effort=reasoning_effort,
+)
 
 answer = response.choices[0].message.content
 # print("===== RAW MODEL ANSWER =====")

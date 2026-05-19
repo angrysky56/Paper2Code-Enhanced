@@ -26,29 +26,50 @@ Our method outperforms strong baselines on both Paper2Code and PaperBench and pr
 - Note: The following command runs example paper ([Attention Is All You Need](https://arxiv.org/abs/1706.03762)).
 - For more setup options, including LaTeX-based inputs and PDF-to-JSON conversion, see [📚 Detailed Setup Instructions](#-detailed-setup-instructions).
 
-### Using OpenAI API
+### Using `uv` (Recommended)
 
-- 💵 Estimated cost for using o3-mini: $0.50–$0.70
+This repository is managed as a `uv` project. `uv` ensures reproducible virtual environments, ultra-fast installs, and clean dependency management.
 
 ```bash
-pip install openai
+# 1. Install uv (if you haven't already)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
+# 2. Sync virtual environment and install all dependencies (including Anthropic SDK)
+uv sync
+
+# 3. Configure environment variables (e.g. OpenAI or MiniMax)
+export LLM_API_KEY="your-api-key"
+export LLM_MODEL="MiniMax-M2.7"
+
+# 4. Run PaperCoder
+cd scripts
+uv run bash run.sh
+```
+
+### Using MiniMax M2.7 (Anthropic SDK Integration)
+
+The pipeline is fully optimized for **MiniMax M2.7** using the Anthropic SDK. This captures the model's advanced **thinking/reasoning blocks** natively.
+
+To configure:
+```bash
+# Configure your MiniMax API Key and set the model
+export ANTHROPIC_API_KEY="your_minimax_api_key"
+export LLM_MODEL="MiniMax-M2.7"
+
+# (Optional) International Endpoint (default)
+export ANTHROPIC_BASE_URL="https://api.minimax.io/anthropic"
+```
+
+### Legacy Pip Installation
+
+If you prefer using traditional virtual environments and `pip`:
+
+```bash
+pip install -r requirements.txt
 export OPENAI_API_KEY="<OPENAI_API_KEY>"
 
 cd scripts
 bash run.sh
-```
-
-### Using Open Source Models with vLLM
-
-- If you encounter any issues installing vLLM, please refer to the [official vLLM repository](https://github.com/vllm-project/vllm).
-- The default model is `deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct`.
-
-```bash
-pip install vllm
-
-cd scripts
-bash run_llm.sh
 ```
 
 ### Output Folder Structure (Only Important Files)
@@ -59,6 +80,7 @@ outputs
 │   ├── analyzing_artifacts
 │   ├── coding_artifacts
 │   └── planning_artifacts
+│   └── accumulated_cost.json
 └── Transformer_repo # Final output repository
 ```
 
@@ -68,20 +90,12 @@ outputs
 
 ### 🛠️ Environment Setup
 
-- 💡 To use the `o3-mini` version, make sure you have the latest `openai` package installed.
-- We recommend using a Python virtual environment before installing dependencies.
-- 📦 Install only what you need:
-  - For OpenAI API, install `openai`.
-  - For open-source models, install `vllm`.
-  - If you encounter any issues installing vLLM, please refer to the [official vLLM repository](https://github.com/vllm-project/vllm).
-
+- 💡 To use the `o3-mini` version or MiniMax, ensure you have set the appropriate environment variables.
+- We recommend using `uv` to manage your environment:
 ```bash
-pip install openai
-pip install vllm
+uv sync
 ```
-
-- Or, if you prefer, you can install all dependencies using `pip`:
-
+- Alternatively, you can use pip:
 ```bash
 pip install -r requirements.txt
 ```
