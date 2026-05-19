@@ -102,12 +102,14 @@ class SubprocessExecutor(BaseExecutor):
 
     def _preexec(self) -> None:
         """Applied in the child process before exec — sets resource limits."""
-        # TODO(phase-1): Enable memory cap via resource.setrlimit when EXECUTOR_MEMORY_MB > 0.
-        #   import resource
-        #   if self.memory_mb > 0:
-        #       limit_bytes = self.memory_mb * 1024 * 1024
-        #       resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
-        pass
+        if self.memory_mb > 0:
+            try:
+                import resource
+                limit_bytes = self.memory_mb * 1024 * 1024
+                resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
+            except (ImportError, ValueError) as exc:
+                import sys
+                sys.stderr.write(f"[executor] Failed to set resource limits: {exc}\n")
 
     def run(
         self,
@@ -134,6 +136,12 @@ class SubprocessExecutor(BaseExecutor):
             returncode = proc.returncode
             stdout = proc.stdout or ""
             stderr = proc.stderr or ""
+
+            # Check if subprocess was terminated due to memory limits or signals
+            if returncode in (-9, -11, 137, 139) or "MemoryError" in stderr:
+                if not stderr:
+                    stderr = ""
+                stderr += f"\n[executor] Process terminated or failed. Resource limits exceeded (OOM/SIGKILL/SIGSEGV) or MemoryError occurred. Exit code: {returncode}."
 
         except subprocess.TimeoutExpired as exc:
             timed_out = True
