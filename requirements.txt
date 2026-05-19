@@ -1,5 +1,9 @@
 openai>=1.65.4
 python-dotenv>=1.2.2
+# Phase 2 — persistence layer (install when wiring db.py into stage scripts)
+sqlmodel>=0.0.21
+sqlalchemy>=2.0.0
+# Local/vLLM inference (only needed for *_llm.py scripts, not API-based scripts)
 vllm>=0.20.0
 transformers>=5.0.0
 tiktoken>=0.9.0

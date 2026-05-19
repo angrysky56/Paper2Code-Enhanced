@@ -8,6 +8,12 @@ from utils import print_log_cost, print_response, save_accumulated_cost, unified
 
 load_dotenv()
 
+# TODO(phase-2): Uncomment when db.py is wired in:
+#   from db import init_db, write_stage_result
+#   init_db()
+# TODO(phase-2): Receive run_id from pipeline.py via --run_id arg or env var RUN_ID.
+#   run_id = int(os.environ.get("RUN_ID", "-1"))
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--paper_name", type=str)
@@ -278,6 +284,18 @@ for idx, instruction_msg in enumerate(
     total_accumulated_cost = temp_total_accumulated_cost
 
     responses.append(completion_json)
+
+    # TODO(phase-2): Write stage result to DB after each LLM call:
+    #   usage = cal_cost(completion_json, gpt_version)
+    #   write_stage_result(
+    #       run_id, f"planning:{current_stage}",
+    #       success=True,
+    #       tokens_in=usage["actual_input_tokens"],
+    #       tokens_out=usage["output_tokens"],
+    #       cost_usd=usage["total_cost"],
+    #       output_path=f"{output_dir}/planning_trajectories.json",
+    #       messages=trajectories,
+    #   )
 
     # trajectories
     message = completion.choices[0].message

@@ -19,6 +19,11 @@ from utils import (
 
 load_dotenv()
 
+# TODO(phase-2): Uncomment when db.py is wired in:
+#   from db import init_db, write_stage_result
+#   init_db()
+#   run_id = int(os.environ.get("RUN_ID", "-1"))
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--paper_name", type=str)
@@ -226,6 +231,15 @@ for todo_file_name in tqdm(todo_file_lst):
         completion_json, gpt_version, current_stage, output_dir, total_accumulated_cost
     )
     total_accumulated_cost = temp_total_accumulated_cost
+
+    # TODO(phase-2): Write stage result to DB after each LLM call:
+    #   write_stage_result(
+    #       run_id, f"coding:{todo_file_name}",
+    #       success=True,
+    #       tokens_in=..., tokens_out=..., cost_usd=...,
+    #       output_path=f"{output_repo_dir}/{todo_file_name}",
+    #       messages=trajectories,
+    #   )
 
     # save artifacts
     with open(f"{artifact_output_dir}/{save_todo_file_name}_coding.txt", "w") as f:

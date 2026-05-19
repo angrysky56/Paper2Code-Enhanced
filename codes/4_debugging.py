@@ -8,6 +8,18 @@ from utils import content_to_json, extract_planning, read_python_files, unified_
 
 load_dotenv()
 
+# TODO(phase-1): Replace raw error-file input with sandboxed execution output:
+#   from executor import get_executor
+#   executor = get_executor()
+#   result = executor.run(["python", "main.py"], cwd=debug_dir, timeout=int(os.environ.get("EXECUTOR_TIMEOUT_SECS", "120")))
+#   execution_error_msg = result.stderr if not result.success else ""
+#   If result.success: skip LLM debug call entirely and mark run complete.
+
+# TODO(phase-2): Uncomment when db.py is wired in:
+#   from db import init_db, write_stage_result, write_execution_trial
+#   init_db()
+#   run_id = int(os.environ.get("RUN_ID", "-1"))
+
 
 def parse_and_apply_changes(responses, debug_dir, save_num=1):
     """Apply SEARCH / REPLACE edits produced by the LLM to files in debug_dir."""
@@ -256,6 +268,27 @@ answer = response.choices[0].message.content
 # print("===== RAW MODEL ANSWER =====")
 # print(answer)
 
+# TODO(phase-2): Write LLM debug call to DB:
+#   write_stage_result(
+#       run_id, "debugging",
+#       success=True,
+#       tokens_in=..., tokens_out=..., cost_usd=...,
+#       messages=msg,
+#   )
+
 # Use the direct API response as input to the patch applier
 responses = [answer]
 parse_and_apply_changes(responses, debug_dir, save_num=args.save_num)
+
+# TODO(phase-1): After applying patches, re-run the code via executor and log trial:
+#   result = executor.run(["python", "main.py"], cwd=debug_dir)
+#   write_execution_trial(
+#       run_id, attempt_num=args.save_num,
+#       stdout=result.stdout, stderr=result.stderr,
+#       returncode=result.returncode, timed_out=result.timed_out,
+#       elapsed_seconds=result.elapsed_seconds, code_dir=debug_dir,
+#   )
+#   if result.success:
+#       complete_run(run_id, status="completed")
+#   elif args.save_num >= MAX_DEBUG_ATTEMPTS:
+#       complete_run(run_id, status="failed")
