@@ -256,3 +256,12 @@ uv run python eval.py \
 🪙 Accumulated total cost so far: $0.16451380
 ============================================
 ```
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to the Paper2Code project.
+
+## 📄 License
+
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for the full license text.
+

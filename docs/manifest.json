@@ -1,0 +1,51 @@
+{
+  "README.md": {
+    "generated_by_gsd": false,
+    "title": "Paper2Code-Enhanced",
+    "purpose": "A modular, multi-agent AI pipeline for converting scientific papers into verified code repositories.",
+    "category": "readme",
+    "hash": "7b637dde4abb27529c128853f3fcd6cd98a137e245f5784767b1562881d61b9f"
+  },
+  "docs/ARCHITECTURE.md": {
+    "generated_by_gsd": true,
+    "title": "System Architecture",
+    "purpose": "Details the architecture, orchestrator flow, persistence, sandbox execution details, and module interactions.",
+    "category": "architecture",
+    "hash": "5f27cca22895409186626b693952fe946075665b108dcfc9de5b9cfd40289539"
+  },
+  "docs/GETTING-STARTED.md": {
+    "generated_by_gsd": true,
+    "title": "Getting Started Guide",
+    "purpose": "Lists prerequisites, environment variables, step-by-step setup guides, installation commands, and first verification checks.",
+    "category": "getting_started",
+    "hash": "5254340a95be6d198a81113dfa3eacb3ddd0bd83f5b018a8fd92827ad32fe0b7"
+  },
+  "docs/DEVELOPMENT.md": {
+    "generated_by_gsd": true,
+    "title": "Development Guide",
+    "purpose": "Provides guidelines on style formatting, PEP-484 type hints, local utility setup, branch naming rules, and PR checklist.",
+    "category": "development",
+    "hash": "013f76bd37939c3ca9eecf8c3ce6710fce8c73d53f81eeeaeba533084817e9db"
+  },
+  "docs/TESTING.md": {
+    "generated_by_gsd": true,
+    "title": "Testing Guide",
+    "purpose": "Documents the pytest framework setup, suite execution, writing test patterns, and overriding execution variables.",
+    "category": "testing",
+    "hash": "e93a9a259c31d211500453b887f1ababc94b19dba321c4f38632dc0bd1b97ea5"
+  },
+  "docs/CONFIGURATION.md": {
+    "generated_by_gsd": true,
+    "title": "Configuration Schema",
+    "purpose": "Lists environment settings, RLM persistence pathing, base sandboxing image configurations, and model providers.",
+    "category": "configuration",
+    "hash": "b2355fde22c0098f926d72e426409703b4d38349b2450e42d98dd9d7f60efec0"
+  },
+  "CONTRIBUTING.md": {
+    "generated_by_gsd": true,
+    "title": "Contributing Guide",
+    "purpose": "Outlines guidelines for local sandbox testing, codebase styles, and issue filing conventions.",
+    "category": "contributing",
+    "hash": "fabcae44b6314923c330aa7e375d96ba7fe6f48936d2398bef60b874e28214de"
+  }
+}
