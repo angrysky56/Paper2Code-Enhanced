@@ -7,7 +7,7 @@
 
 ### Sandboxed Code Execution (EXEC)
 
-- [ ] **EXEC-01**: SubprocessExecutor sets memory boundaries using the Linux `resource` module when memory limits are specified.
+- [x] **EXEC-01**: SubprocessExecutor sets memory boundaries using the Linux `resource` module when memory limits are specified.
 - [ ] **EXEC-02**: DockerExecutor provides isolated containerized execution with mount support and optional NVIDIA GPU capabilities.
 - [ ] **EXEC-03**: The pipeline's self-debugging loop (`4_debugging.py`) runs generated code exclusively through sandboxed executors rather than raw local subprocesses.
 
@@ -50,7 +50,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EXEC-01 | Phase 1 | Pending |
+| EXEC-01 | Phase 1 | Complete |
 | EXEC-02 | Phase 1 | Pending |
 | EXEC-03 | Phase 1 | Pending |
 | DB-01 | Phase 2 | Pending |
