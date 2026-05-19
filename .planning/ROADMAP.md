@@ -6,7 +6,7 @@ This roadmap lays out the four key modernization phases to transition the **Pape
 
 ## Phases
 
-- [ ] **Phase 1: Sandboxed Code Execution** - Secure generated PyTorch code execution using restricted Subprocess and Docker runtimes.
+- [x] **Phase 1: Sandboxed Code Execution** - Secure generated PyTorch code execution using restricted Subprocess and Docker runtimes.
 - [ ] **Phase 2: Database Persistence & RLM Logging** - Append-only SQLite/SQLModel logging of Runs, StageResults, and ExecutionTrials.
 - [ ] **Phase 3: Structured CLI Interoperability** - Format CLI output to dump machine-readable JSON to `stdout` and redirect logging to `stderr`.
 - [ ] **Phase 4: Programmatic Pipeline Orchestration** - Refactor and unify all reasoning stage functions in-memory and register a global CLI wrapper.
@@ -27,10 +27,10 @@ This roadmap lays out the four key modernization phases to transition the **Pape
 Plans:
 **Wave 1**
 - [x] 01-01: Implement memory constraints in `SubprocessExecutor` using resource setrlimits
-- [ ] 01-02: Implement PyTorch/CUDA-capable containerised runtime in `DockerExecutor`
+- [x] 01-02: Implement PyTorch/CUDA-capable containerised runtime in `DockerExecutor`
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 01-03: Wire the sandboxed executor into `4_debugging.py` replacing raw shell executions
+- [x] 01-03: Wire the sandboxed executor into `4_debugging.py` replacing raw shell executions
 
 ### Phase 2: Database Persistence & RLM Logging
 **Goal**: Implement complete database auditing, metrics collection, and resume-on-failure.
@@ -86,7 +86,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Sandboxed Code Execution | 1/3 | In Progress|  |
+| 1. Sandboxed Code Execution | 3/3 | Completed | 2026-05-19 |
 | 2. Database Persistence & RLM Logging | 0/4 | Not started | - |
 | 3. Structured CLI Interoperability | 0/1 | Not started | - |
 | 4. Programmatic Pipeline Orchestration | 0/2 | Not started | - |
