@@ -144,7 +144,7 @@ python ./s2orc-doc2json/doc2json/grobid2json/process_pdf.py \
 export OPENAI_API_KEY="<OPENAI_API_KEY>"
 
 cd scripts
-bash run.sh
+uv run bash run.sh
 ```
 
 ```bash
@@ -152,7 +152,7 @@ bash run.sh
 export OPENAI_API_KEY="<OPENAI_API_KEY>"
 
 cd scripts
-bash run_latex.sh
+uv run bash run_latex.sh
 ```
 
 #### Using Open Source Models with vLLM
@@ -162,13 +162,13 @@ bash run_latex.sh
 ```bash
 # Using the PDF-based JSON format of the paper
 cd scripts
-bash run_llm.sh
+uv run bash run_llm.sh
 ```
 
 ```bash
 # Using the LaTeX source of the paper
 cd scripts
-bash run_latex_llm.sh
+uv run bash run_latex_llm.sh
 ```
 
 ---
@@ -193,7 +193,6 @@ bash run_latex_llm.sh
 ### 🛠️ Environment Setup
 
 ```bash
-pip install tiktoken
 export OPENAI_API_KEY="<OPENAI_API_KEY>"
 ```
 
@@ -203,7 +202,7 @@ export OPENAI_API_KEY="<OPENAI_API_KEY>"
 
 ```bash
 cd codes/
-python eval.py \
+uv run python eval.py \
     --paper_name Transformer \
     --pdf_json_path ../examples/Transformer_cleaned.json \
     --data_dir ../data \
@@ -222,7 +221,7 @@ python eval.py \
 
 ```bash
 cd codes/
-python eval.py \
+uv run python eval.py \
     --paper_name Transformer \
     --pdf_json_path ../examples/Transformer_cleaned.json \
     --data_dir ../data \
