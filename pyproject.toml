@@ -10,4 +10,7 @@ dependencies = [
     "transformers>=5.0.0",
     "vllm>=0.20.0",
     "docker>=7.1.0",
+    "sqlmodel>=0.0.21",
+    "sqlalchemy>=2.0.0",
 ]
+

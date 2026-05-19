@@ -32,11 +32,12 @@ TODO(phase-2): Add resume logic — check for existing Run with status='running'
     re-use its run_id instead of creating a new one (idempotent pipeline re-entry).
 TODO(phase-2): Add a CLI query tool (db_query.py) for inspecting run history / RLM stats.
 """
-
 from __future__ import annotations
 
 import hashlib
 import os
+import zlib
+import json
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -92,8 +93,10 @@ if _SQLMODEL_AVAILABLE:
         output_dir: str = ""
         notes: str = ""                  # free-form, e.g. git commit or experiment tag
 
-        # TODO(phase-2): Add foreign key to a future Project table once
-        #   meta-harness domain tracking is introduced.
+        # Aggregate tracking columns for high-performance dashboard/analytics
+        total_cost: float = 0.0
+        total_tokens_in: int = 0
+        total_tokens_out: int = 0
 
     class StageResult(SQLModel, table=True):
         """
@@ -113,8 +116,8 @@ if _SQLMODEL_AVAILABLE:
         model_used: str = ""             # may differ from Run if overridden per-stage
         created_at: str = Field(default_factory=_utcnow)
 
-        # TODO(phase-2): Store compressed prompt/response snapshots as BLOB
-        #   for full RLM replay. Use zlib.compress(json.dumps(messages).encode()).
+        # Store compressed prompt/response snapshots for full RLM replay
+        messages_blob: Optional[bytes] = Field(default=None, nullable=True)
 
     class ExecutionTrial(SQLModel, table=True):
         """
@@ -186,20 +189,42 @@ def create_run(
     Insert a new Run record and return its integer ID.
     Pass this ID to all subsequent write_* calls for this pipeline execution.
 
-    TODO(phase-2): Before inserting, check for a stale 'running' Run with the
-        same paper_name + output_dir and return its ID instead (resume support).
+    Before inserting, check for a stale 'running' Run with the
+    same paper_name + output_dir and return its ID instead (resume support).
     """
     if not _SQLMODEL_AVAILABLE or _engine is None:
-        return -1  # persistence disabled — callers should handle -1 run_id gracefully
+        return -1  # persistence disabled
 
-    run = Run(
-        paper_name=paper_name,
-        model_used=model_used,
-        output_dir=output_dir,
-        executor_type=executor_type,
-        notes=notes,
-    )
     with get_session() as session:
+        # Check for active/stale runs (status in running, interrupted, failed)
+        statement = select(Run).where(
+            Run.paper_name == paper_name,
+            Run.output_dir == output_dir,
+            Run.status.in_(["running", "interrupted", "failed"]) # type: ignore[attr-defined]
+        )
+        existing_runs = session.exec(statement).all()
+        if existing_runs:
+            # Sort by started_at descending to get the most recent one
+            existing_runs.sort(key=lambda r: r.started_at, reverse=True)
+            existing_run = existing_runs[0]
+            existing_run.status = "running"
+            existing_run.model_used = model_used
+            existing_run.executor_type = executor_type
+            if notes:
+                existing_run.notes = notes
+            session.add(existing_run)
+            session.commit()
+            session.refresh(existing_run)
+            print(f"[db] Resuming existing run ID {existing_run.id} for paper '{paper_name}'")
+            return existing_run.id  # type: ignore[return-value]
+
+        run = Run(
+            paper_name=paper_name,
+            model_used=model_used,
+            output_dir=output_dir,
+            executor_type=executor_type,
+            notes=notes,
+        )
         session.add(run)
         session.commit()
         session.refresh(run)
@@ -211,8 +236,8 @@ def complete_run(run_id: int, status: str = "completed") -> None:
     Mark a Run as completed (or failed/interrupted).
     Call at the end of each pipeline stage script or pipeline.py.
 
-    TODO(phase-2): Compute aggregate cost/token totals from StageResult rows
-        and write them back onto the Run record for quick dashboard queries.
+    Compute aggregate cost/token totals from StageResult rows
+    and write them back onto the Run record for quick dashboard queries.
     """
     if not _SQLMODEL_AVAILABLE or _engine is None or run_id < 0:
         return
@@ -222,6 +247,14 @@ def complete_run(run_id: int, status: str = "completed") -> None:
         if run:
             run.status = status
             run.completed_at = _utcnow()
+
+            # Compute aggregations from StageResult
+            statement = select(StageResult).where(StageResult.run_id == run_id)
+            results = session.exec(statement).all()
+            run.total_cost = sum(r.cost_usd for r in results)
+            run.total_tokens_in = sum(r.tokens_in for r in results)
+            run.total_tokens_out = sum(r.tokens_out for r in results)
+
             session.add(run)
             session.commit()
 
@@ -261,6 +294,7 @@ def write_stage_result(
         return -1
 
     input_hash = _hash_str(str(messages)) if messages else ""
+    messages_blob = zlib.compress(json.dumps(messages).encode()) if messages else None
     record = StageResult(
         run_id=run_id,
         stage_name=stage_name,
@@ -272,6 +306,7 @@ def write_stage_result(
         success=success,
         error_text=error_text,
         model_used=model_used,
+        messages_blob=messages_blob,
     )
     with get_session() as session:
         session.add(record)
@@ -339,9 +374,79 @@ def write_execution_trial(
 def get_run_summary(run_id: int) -> dict:
     """
     Return a summary dict for a single Run including stage count and total cost.
-
-    TODO(phase-2): Implement fully — currently returns empty shell.
-    TODO(phase-2): Add get_all_runs(), get_failed_runs(), get_runs_by_paper() helpers.
     """
-    # TODO(phase-2): Implement this query.
-    return {"run_id": run_id, "status": "not_implemented"}
+    if not _SQLMODEL_AVAILABLE or _engine is None or run_id < 0:
+        return {"run_id": run_id, "status": "disabled"}
+
+    with get_session() as session:
+        run = session.get(Run, run_id)
+        if not run:
+            return {"run_id": run_id, "status": "not_found"}
+
+        # Get stages
+        stage_statement = select(StageResult).where(StageResult.run_id == run_id)
+        stages = session.exec(stage_statement).all()
+
+        # Get trials
+        trial_statement = select(ExecutionTrial).where(ExecutionTrial.run_id == run_id)
+        trials = session.exec(trial_statement).all()
+
+        return {
+            "run_id": run.id,
+            "paper_name": run.paper_name,
+            "model_used": run.model_used,
+            "executor_type": run.executor_type,
+            "status": run.status,
+            "started_at": run.started_at,
+            "completed_at": run.completed_at,
+            "output_dir": run.output_dir,
+            "notes": run.notes,
+            "total_cost": run.total_cost,
+            "total_tokens_in": run.total_tokens_in,
+            "total_tokens_out": run.total_tokens_out,
+            "stages": [
+                {
+                    "stage_name": s.stage_name,
+                    "success": s.success,
+                    "tokens_in": s.tokens_in,
+                    "tokens_out": s.tokens_out,
+                    "cost_usd": s.cost_usd,
+                    "created_at": s.created_at,
+                }
+                for s in stages
+            ],
+            "trials": [
+                {
+                    "attempt_num": t.attempt_num,
+                    "returncode": t.returncode,
+                    "success": t.success,
+                    "elapsed_seconds": t.elapsed_seconds,
+                    "created_at": t.created_at,
+                }
+                for t in trials
+            ],
+        }
+
+
+def get_all_runs() -> list[Run]:
+    """Return all Run records in the database."""
+    if not _SQLMODEL_AVAILABLE or _engine is None:
+        return []
+    with get_session() as session:
+        return session.exec(select(Run)).all()
+
+
+def get_failed_runs() -> list[Run]:
+    """Return all failed Run records."""
+    if not _SQLMODEL_AVAILABLE or _engine is None:
+        return []
+    with get_session() as session:
+        return session.exec(select(Run).where(Run.status == "failed")).all()
+
+
+def get_runs_by_paper(paper_name: str) -> list[Run]:
+    """Return all Run records matching paper_name."""
+    if not _SQLMODEL_AVAILABLE or _engine is None:
+        return []
+    with get_session() as session:
+        return session.exec(select(Run).where(Run.paper_name == paper_name)).all()
