@@ -5,6 +5,11 @@
     "description": "Local API backend for executing and auditing PaperCoder's academic code generation pipeline.",
     "version": "0.1.0"
   },
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
   "servers": [
     {
       "url": "http://localhost:8000",
@@ -162,6 +167,7 @@
                     "$ref": "#/components/schemas/RunListItem"
                   },
                   "type": "array",
+                  "maxItems": 10000,
                   "title": "Response List Runs Runs Get"
                 }
               }
@@ -231,6 +237,13 @@
     }
   },
   "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    },
     "schemas": {
       "EvalRunRequest": {
         "properties": {
@@ -361,6 +374,7 @@
               "$ref": "#/components/schemas/ValidationError"
             },
             "type": "array",
+            "maxItems": 100,
             "title": "Detail"
           }
         },
@@ -683,6 +697,7 @@
               "$ref": "#/components/schemas/RunStageSummary"
             },
             "type": "array",
+            "maxItems": 100,
             "title": "Stages"
           },
           "trials": {
@@ -690,6 +705,7 @@
               "$ref": "#/components/schemas/RunTrialSummary"
             },
             "type": "array",
+            "maxItems": 100,
             "title": "Trials"
           }
         },
@@ -921,6 +937,7 @@
               ]
             },
             "type": "array",
+            "maxItems": 100,
             "title": "Location"
           },
           "msg": {

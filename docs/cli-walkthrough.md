@@ -119,17 +119,20 @@ ID  PAPER_NAME      STATUS     TOTAL_COST  MODEL_USED    STARTED_AT
 ## 🔌 Core Architecture & MCP Integration Guide
 
 ### 1. Do we need the backend server running?
-*   **Yes, for execution & writes**: Since `Paper2Code-Enhanced` is a Python application, the Go binaries (`paper2code-pp-cli` and `paper2code-pp-mcp`) act as agent-friendly, type-safe wrappers. Any action that triggers a run, parses a PDF, evaluates code, or requests live API data **requires the local FastAPI server to be running in the background**.
-    *   To start the backend server:
-        ```bash
-        ./scripts/server.sh
-        ```
-*   **No, for offline lookups & queries**: If you synchronize the API data to your local database using `paper2code-pp-cli sync`, the CLI and MCP can perform full-text searches (`search` tool) or read-only SQL queries (`sql` tool) completely offline without the backend running.
+
+- **Yes, for execution & writes**: Since `Paper2Code-Enhanced` is a Python application, the Go binaries (`paper2code-pp-cli` and `paper2code-pp-mcp`) act as agent-friendly, type-safe wrappers. Any action that triggers a run, parses a PDF, evaluates code, or requests live API data **requires the local FastAPI server to be running in the background**.
+  - To start the backend server:
+    ```bash
+    ./scripts/server.sh
+    ```
+- **No, for offline lookups & queries**: If you synchronize the API data to your local database using `paper2code-pp-cli sync`, the CLI and MCP can perform full-text searches (`search` tool) or read-only SQL queries (`sql` tool) completely offline without the backend running.
 
 ### 2. MCP Configuration for Claude Desktop & Cursor
+
 To register the MCP server so that your AI agents (e.g. Claude Desktop, Cursor) can use it natively, use the configuration templates below.
 
 #### 💬 Claude Desktop Config
+
 Add this to your `claude_desktop_config.json` (typically at `~/.config/Claude/claude_desktop_config.json` on Linux):
 
 ```json
@@ -144,8 +147,9 @@ Add this to your `claude_desktop_config.json` (typically at `~/.config/Claude/cl
 ```
 
 #### 🚀 Cursor Integration
-In Cursor, go to **Settings > Features > MCP** and add a new MCP server:
-*   **Name**: `paper2code`
-*   **Type**: `stdio`
-*   **Command**: `/home/ty/Repositories/ai_workspace/Paper2Code-Enhanced/paper2code-cli/build/stage/bin/paper2code-pp-mcp --transport stdio`
 
+In Cursor, go to **Settings > Features > MCP** and add a new MCP server:
+
+- **Name**: `paper2code`
+- **Type**: `stdio`
+- **Command**: `/home/ty/Repositories/ai_workspace/Paper2Code-Enhanced/paper2code-cli/build/stage/bin/paper2code-pp-mcp --transport stdio`

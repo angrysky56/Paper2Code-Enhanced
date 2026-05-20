@@ -5,6 +5,11 @@
     "description": "Local API backend for executing and auditing PaperCoder's academic code generation pipeline.",
     "version": "0.1.0"
   },
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
   "servers": [
     {
       "url": "http://localhost:8000",
@@ -162,6 +167,7 @@
                     "$ref": "#/components/schemas/RunListItem"
                   },
                   "type": "array",
+                  "maxItems": 10000,
                   "title": "Response List Runs Runs Get"
                 }
               }
@@ -231,6 +237,13 @@
     }
   },
   "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    },
     "schemas": {
       "EvalRunRequest": {
         "properties": {
@@ -273,10 +286,7 @@
           },
           "eval_type": {
             "type": "string",
-            "enum": [
-              "ref_free",
-              "ref_based"
-            ],
+            "enum": ["ref_free", "ref_based"],
             "title": "Eval Type",
             "description": "Evaluation type.",
             "default": "ref_free"
@@ -361,6 +371,7 @@
               "$ref": "#/components/schemas/ValidationError"
             },
             "type": "array",
+            "maxItems": 100,
             "title": "Detail"
           }
         },
@@ -384,10 +395,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "db_path",
-          "db_available"
-        ],
+        "required": ["db_path", "db_available"],
         "title": "HealthResponse"
       },
       "PDFProcessRequest": {
@@ -434,10 +442,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "input_json_path",
-          "output_json_path"
-        ],
+        "required": ["input_json_path", "output_json_path"],
         "title": "PDFProcessRequest"
       },
       "PDFProcessResponse": {
@@ -456,11 +461,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "status",
-          "message",
-          "output_json_path"
-        ],
+        "required": ["status", "message", "output_json_path"],
         "title": "PDFProcessResponse"
       },
       "PipelineRunRequest": {
@@ -535,10 +536,7 @@
           },
           "paper_format": {
             "type": "string",
-            "enum": [
-              "JSON",
-              "LaTeX"
-            ],
+            "enum": ["JSON", "LaTeX"],
             "title": "Paper Format",
             "description": "Input paper format.",
             "default": "JSON"
@@ -585,12 +583,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "run_id",
-          "paper_name",
-          "status",
-          "message"
-        ],
+        "required": ["run_id", "paper_name", "status", "message"],
         "title": "PipelineRunResponse"
       },
       "RunDetailResponse": {
@@ -683,6 +676,7 @@
               "$ref": "#/components/schemas/RunStageSummary"
             },
             "type": "array",
+            "maxItems": 100,
             "title": "Stages"
           },
           "trials": {
@@ -690,6 +684,7 @@
               "$ref": "#/components/schemas/RunTrialSummary"
             },
             "type": "array",
+            "maxItems": 100,
             "title": "Trials"
           }
         },
@@ -921,6 +916,7 @@
               ]
             },
             "type": "array",
+            "maxItems": 100,
             "title": "Location"
           },
           "msg": {
@@ -940,11 +936,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
+        "required": ["loc", "msg", "type"],
         "title": "ValidationError"
       }
     }
