@@ -3,12 +3,17 @@ import json
 import os
 import sys
 
+from db import complete_run, create_run, init_db, write_stage_result
 from dotenv import load_dotenv
-from utils import print_log_cost, print_response, save_accumulated_cost, unified_api_call, cal_cost
-from db import init_db, create_run, write_stage_result, complete_run
+from utils import (
+    cal_cost,
+    print_log_cost,
+    print_response,
+    save_accumulated_cost,
+    unified_api_call,
+)
 
 load_dotenv()
-
 
 
 parser = argparse.ArgumentParser()
@@ -25,10 +30,13 @@ parser.add_argument("--pdf_latex_path", type=str)  # latex format
 parser.add_argument("--output_dir", type=str, default="")
 parser.add_argument("--run_id", type=int, default=-1)
 
+
 def run_stage(config) -> None:
     # Retrieve configuration dynamically supporting duck typing
     paper_name = getattr(config, "paper_name", None)
-    gpt_version = getattr(config, "gpt_version", getattr(config, "model", "MiniMax-M2.7"))
+    gpt_version = getattr(
+        config, "gpt_version", getattr(config, "model", "MiniMax-M2.7")
+    )
     paper_format = getattr(config, "paper_format", "JSON")
     pdf_json_path = getattr(config, "pdf_json_path", None)
     pdf_latex_path = getattr(config, "pdf_latex_path", None)
@@ -39,7 +47,9 @@ def run_stage(config) -> None:
     run_id = int(os.environ.get("RUN_ID", run_id))
     init_db()
     if run_id == -1:
-        run_id = create_run(paper_name=paper_name, model_used=gpt_version, output_dir=output_dir)
+        run_id = create_run(
+            paper_name=paper_name, model_used=gpt_version, output_dir=output_dir
+        )
 
     if paper_format == "JSON":
         with open(f"{pdf_json_path}") as f:
@@ -279,7 +289,11 @@ def run_stage(config) -> None:
         # print and logging
         print_response(completion_json)
         temp_total_accumulated_cost = print_log_cost(
-            completion_json, gpt_version, current_stage, output_dir, total_accumulated_cost
+            completion_json,
+            gpt_version,
+            current_stage,
+            output_dir,
+            total_accumulated_cost,
         )
         total_accumulated_cost = temp_total_accumulated_cost
 

@@ -6,6 +6,7 @@ import shutil
 
 from utils import content_to_json, extract_planning, format_json_data
 
+
 def run_stage(config) -> None:
     paper_name = getattr(config, "paper_name", "")
     output_dir = getattr(config, "output_dir", "")
@@ -50,18 +51,23 @@ def run_stage(config) -> None:
     formatted_arch_design = format_json_data(arch_design)
     formatted_logic_design = format_json_data(logic_design)
 
-    with open(f"{artifact_output_dir}/1.1_overall_plan.txt", "w", encoding="utf-8") as f:
+    with open(
+        f"{artifact_output_dir}/1.1_overall_plan.txt", "w", encoding="utf-8"
+    ) as f:
         f.write(context_lst[0])
 
     with open(f"{artifact_output_dir}/1.2_arch_design.txt", "w", encoding="utf-8") as f:
         f.write(formatted_arch_design)
 
-    with open(f"{artifact_output_dir}/1.3_logic_design.txt", "w", encoding="utf-8") as f:
+    with open(
+        f"{artifact_output_dir}/1.3_logic_design.txt", "w", encoding="utf-8"
+    ) as f:
         f.write(formatted_logic_design)
 
     shutil.copy(
         f"{output_dir}/planning_config.yaml", f"{artifact_output_dir}/1.4_config.yaml"
     )
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

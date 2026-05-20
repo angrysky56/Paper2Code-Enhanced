@@ -56,9 +56,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
-import subprocess
 import shutil
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -67,14 +67,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 try:
-    from db import init_db, create_run, complete_run, get_run_summary
+    from db import complete_run, create_run, get_run_summary, init_db
 except ImportError:
-    from codes.db import init_db, create_run, complete_run, get_run_summary
+    from codes.db import complete_run, create_run, get_run_summary, init_db
 
 
 # ---------------------------------------------------------------------------
 # Config dataclass — single source of truth for a pipeline run
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class PipelineConfig:
@@ -86,8 +87,12 @@ class PipelineConfig:
     output_repo_dir: str
 
     # Optional overrides (defaults come from .env)
-    model: str = field(default_factory=lambda: os.environ.get("LLM_MODEL", "MiniMax-M2.7"))
-    executor_type: str = field(default_factory=lambda: os.environ.get("EXECUTOR_TYPE", "subprocess"))
+    model: str = field(
+        default_factory=lambda: os.environ.get("LLM_MODEL", "MiniMax-M2.7")
+    )
+    executor_type: str = field(
+        default_factory=lambda: os.environ.get("EXECUTOR_TYPE", "subprocess")
+    )
     paper_format: Literal["JSON", "LaTeX"] = "JSON"
     pdf_latex_path: str = ""
 
@@ -95,7 +100,7 @@ class PipelineConfig:
     run_planning: bool = True
     run_analyzing: bool = True
     run_coding: bool = True
-    run_debugging: bool = False    # off by default; requires an error file
+    run_debugging: bool = False  # off by default; requires an error file
 
     # Debugging-specific
     error_file_path: str = ""
@@ -117,6 +122,7 @@ class PipelineConfig:
 # Result dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PipelineResult:
     """Structured result returned by run_pipeline()."""
@@ -134,28 +140,33 @@ class PipelineResult:
     error: str | None = None
 
     def to_json(self) -> str:
-        return json.dumps({
-            "stage": "pipeline",
-            "status": self.status,
-            "run_id": self.run_id,
-            "paper_name": self.paper_name,
-            "output_dir": self.output_dir,
-            "output_repo_dir": self.output_repo_dir,
-            "cost_usd": self.cost_usd,
-            "tokens": {"in": self.tokens_in, "out": self.tokens_out},
-            "stages_completed": self.stages_completed,
-            "stages_failed": self.stages_failed,
-            "error": self.error,
-        }, indent=2)
+        return json.dumps(
+            {
+                "stage": "pipeline",
+                "status": self.status,
+                "run_id": self.run_id,
+                "paper_name": self.paper_name,
+                "output_dir": self.output_dir,
+                "output_repo_dir": self.output_repo_dir,
+                "cost_usd": self.cost_usd,
+                "tokens": {"in": self.tokens_in, "out": self.tokens_out},
+                "stages_completed": self.stages_completed,
+                "stages_failed": self.stages_failed,
+                "error": self.error,
+            },
+            indent=2,
+        )
 
 
 # ---------------------------------------------------------------------------
 # Dynamic module loader
 # ---------------------------------------------------------------------------
 
+
 def load_stage_module(name: str, filename: str):
     """Dynamically loads a stage script module from the same directory as pipeline.py."""
     import importlib.util
+
     dir_path = os.path.dirname(os.path.abspath(__file__))
     file_path = os.path.join(dir_path, filename)
     spec = importlib.util.spec_from_file_location(name, file_path)
@@ -170,6 +181,7 @@ def load_stage_module(name: str, filename: str):
 # Main entry point
 # ---------------------------------------------------------------------------
 
+
 def run_pipeline(config: PipelineConfig) -> PipelineResult:
     """
     Execute the full Paper2Code pipeline for a single paper.
@@ -180,7 +192,9 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
     try:
         init_db(quiet=True)
     except Exception as e:
-        print(f"[pipeline] Warning: Database initialization failed: {e}", file=sys.stderr)
+        print(
+            f"[pipeline] Warning: Database initialization failed: {e}", file=sys.stderr
+        )
 
     # 1. Create or resume DB run
     run_id = -1
@@ -209,16 +223,24 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
                     if s["success"]:
                         stages_to_skip.add(s["stage_name"])
         except Exception as e:
-            print(f"[pipeline] Warning: failed to query stage success for resume: {e}", file=sys.stderr)
+            print(
+                f"[pipeline] Warning: failed to query stage success for resume: {e}",
+                file=sys.stderr,
+            )
 
     # 2. Run planning stage
     if config.run_planning:
         current_stage = "planning"
         if current_stage in stages_to_skip:
-            print(f"[pipeline] Stage '{current_stage}' already completed. Skipping.", file=sys.stderr)
+            print(
+                f"[pipeline] Stage '{current_stage}' already completed. Skipping.",
+                file=sys.stderr,
+            )
             completed_stages.append(current_stage)
         else:
-            print(f"[pipeline] Executing planning stage (in-memory)...", file=sys.stderr)
+            print(
+                f"[pipeline] Executing planning stage (in-memory)...", file=sys.stderr
+            )
             try:
                 planning = load_stage_module("planning", "1_planning.py")
                 planning.run_stage(config)
@@ -243,7 +265,10 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
         # Run 1.1_extract_config.py (config YAML extraction)
         current_stage_extract = "extract_config"
         if current_stage_extract in stages_to_skip:
-            print(f"[pipeline] Step '{current_stage_extract}' already completed. Skipping.", file=sys.stderr)
+            print(
+                f"[pipeline] Step '{current_stage_extract}' already completed. Skipping.",
+                file=sys.stderr,
+            )
         else:
             print(f"[pipeline] Extracting config (in-memory)...", file=sys.stderr)
             try:
@@ -271,20 +296,31 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
             os.makedirs(config.output_repo_dir, exist_ok=True)
             shutil.copy2(
                 os.path.join(config.output_dir, "planning_config.yaml"),
-                os.path.join(config.output_repo_dir, "config.yaml")
+                os.path.join(config.output_repo_dir, "config.yaml"),
             )
-            print(f"[pipeline] Copied planning_config.yaml to {config.output_repo_dir}/config.yaml", file=sys.stderr)
+            print(
+                f"[pipeline] Copied planning_config.yaml to {config.output_repo_dir}/config.yaml",
+                file=sys.stderr,
+            )
         except Exception as e:
-            print(f"[pipeline] Warning: failed to copy config.yaml to repo dir: {e}", file=sys.stderr)
+            print(
+                f"[pipeline] Warning: failed to copy config.yaml to repo dir: {e}",
+                file=sys.stderr,
+            )
 
     # 3. Run analyzing stage
     if config.run_analyzing:
         current_stage = "analyzing"
         if current_stage in stages_to_skip:
-            print(f"[pipeline] Stage '{current_stage}' already completed. Skipping.", file=sys.stderr)
+            print(
+                f"[pipeline] Stage '{current_stage}' already completed. Skipping.",
+                file=sys.stderr,
+            )
             completed_stages.append(current_stage)
         else:
-            print(f"[pipeline] Executing analyzing stage (in-memory)...", file=sys.stderr)
+            print(
+                f"[pipeline] Executing analyzing stage (in-memory)...", file=sys.stderr
+            )
             try:
                 analyzing = load_stage_module("analyzing", "2_analyzing.py")
                 analyzing.run_stage(config)
@@ -310,7 +346,10 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
     if config.run_coding:
         current_stage = "coding"
         if current_stage in stages_to_skip:
-            print(f"[pipeline] Stage '{current_stage}' already completed. Skipping.", file=sys.stderr)
+            print(
+                f"[pipeline] Stage '{current_stage}' already completed. Skipping.",
+                file=sys.stderr,
+            )
             completed_stages.append(current_stage)
         else:
             print(f"[pipeline] Executing coding stage (in-memory)...", file=sys.stderr)
@@ -399,7 +438,10 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
                 error=None,
             )
     except Exception as e:
-        print(f"[pipeline] Warning: failed to fetch run summary from DB: {e}", file=sys.stderr)
+        print(
+            f"[pipeline] Warning: failed to fetch run summary from DB: {e}",
+            file=sys.stderr,
+        )
 
     return PipelineResult(
         status="success",
@@ -413,10 +455,10 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
     )
 
 
-
 # ---------------------------------------------------------------------------
 # CLI interface (Phase 3)
 # ---------------------------------------------------------------------------
+
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
