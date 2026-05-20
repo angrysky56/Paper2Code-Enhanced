@@ -244,8 +244,10 @@ for todo_file_name in tqdm(todo_file_lst):
     trajectories.append({"role": "assistant", "content": completion})
 
     # save
+    save_path = f"{artifact_output_dir}/{todo_file_name}_simple_analysis.txt"
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
     with open(
-        f"{artifact_output_dir}/{todo_file_name}_simple_analysis.txt",
+        save_path,
         "w",
         encoding="utf-8",
     ) as f:

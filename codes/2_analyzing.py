@@ -209,7 +209,9 @@ You DON'T need to provide the actual code yet; focus on a thorough, clear analys
         )
 
         # save
-        with open(f"{artifact_output_dir}/{todo_file_name}_simple_analysis.txt", "w") as f:
+        save_path = f"{artifact_output_dir}/{todo_file_name}_simple_analysis.txt"
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        with open(save_path, "w") as f:
             f.write(completion_json["choices"][0]["message"]["content"])
 
         done_file_lst.append(todo_file_name)
