@@ -12,6 +12,7 @@ dependencies = [
     "docker>=7.1.0",
     "sqlmodel>=0.0.21",
     "sqlalchemy>=2.0.0",
+    "pypdf>=5.0.0",
 ]
 
 [project.scripts]

@@ -214,6 +214,53 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
     completed_stages = []
     stages_to_skip = set()
 
+    # Automatically convert PDF to JSON if pdf_json_path ends with .pdf
+    if config.pdf_json_path.lower().endswith(".pdf"):
+        os.makedirs(config.output_dir, exist_ok=True)
+        compiled_json_path = os.path.join(
+            config.output_dir, f"{config.paper_name}_cleaned.json"
+        )
+        print(f"[pipeline] PDF input detected: {config.pdf_json_path}", file=sys.stderr)
+        print(
+            f"[pipeline] Processing PDF into unified S2ORC JSON format -> {compiled_json_path}",
+            file=sys.stderr,
+        )
+        try:
+            pdf_process = load_stage_module("0_pdf_process", "0_pdf_process.py")
+            from types import SimpleNamespace
+
+            process_args = SimpleNamespace(
+                input_json_path=config.pdf_json_path,
+                output_json_path=compiled_json_path,
+                mode="auto",
+                gpt_version=config.model,
+                paper_name=config.paper_name,
+            )
+            pdf_process.main(process_args)
+
+            # Update pdf_json_path to point to the newly compiled JSON file
+            config.pdf_json_path = compiled_json_path
+            print(
+                f"[pipeline] Successfully compiled and updated pdf_json_path to: {config.pdf_json_path}",
+                file=sys.stderr,
+            )
+        except Exception as e:
+            print(f"❌ PDF processing failed: {e}", file=sys.stderr)
+            try:
+                complete_run(run_id, status="failed")
+            except Exception:
+                pass
+            return PipelineResult(
+                status="failed",
+                paper_name=config.paper_name,
+                output_dir=config.output_dir,
+                output_repo_dir=config.output_repo_dir,
+                run_id=run_id,
+                stages_completed=completed_stages,
+                stages_failed=["pdf_processing"],
+                error=f"PDF preprocessing failed: {e}",
+            )
+
     if config.resume and run_id > 0:
         try:
             summary = get_run_summary(run_id)
