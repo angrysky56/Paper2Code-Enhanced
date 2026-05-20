@@ -51,6 +51,7 @@ uv run bash run.sh
 The pipeline is fully optimized for **MiniMax M2.7** using the Anthropic SDK. This captures the model's advanced **thinking/reasoning blocks** natively.
 
 To configure:
+
 ```bash
 # Configure your MiniMax API Key and set the model
 export ANTHROPIC_API_KEY="your_minimax_api_key"
@@ -92,10 +93,13 @@ outputs
 
 - 💡 To use the `o3-mini` version or MiniMax, ensure you have set the appropriate environment variables.
 - We recommend using `uv` to manage your environment:
+
 ```bash
 uv sync
 ```
+
 - Alternatively, you can use pip:
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -264,4 +268,3 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to th
 ## 📄 License
 
 This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for the full license text.
-
