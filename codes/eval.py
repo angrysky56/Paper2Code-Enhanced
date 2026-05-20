@@ -28,7 +28,7 @@ def api_call(request_json):
     temperature = request_json.get("temperature", 0.5)
     reasoning_effort = request_json.get("reasoning_effort")
     n = request_json.get("n", 1)
-    
+
     return unified_api_call(
         messages=messages,
         gpt_version=gpt_version,

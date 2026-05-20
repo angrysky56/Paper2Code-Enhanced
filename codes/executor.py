@@ -20,9 +20,8 @@ import os
 import subprocess
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Sequence
-
 
 # ---------------------------------------------------------------------------
 # Result dataclass

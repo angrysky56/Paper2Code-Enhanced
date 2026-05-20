@@ -4,9 +4,9 @@ import os
 import re
 import sys
 
+from db import complete_run, create_run, init_db, write_execution_trial, write_stage_result
 from dotenv import load_dotenv
-from utils import content_to_json, extract_planning, read_python_files, unified_api_call, cal_cost
-from db import init_db, create_run, write_stage_result, write_execution_trial, complete_run
+from utils import cal_cost, content_to_json, extract_planning, read_python_files, unified_api_call
 
 try:
     from executor import get_executor
@@ -51,7 +51,7 @@ def parse_and_apply_changes(responses, debug_dir, save_num=1):
 
             # Read file
             try:
-                with open(filepath, "r", encoding="utf-8") as f:
+                with open(filepath, encoding="utf-8") as f:
                     file_content = f.read()
             except Exception as e:
                 print(f"❌ Error reading file {filepath}: {e}\n")
@@ -141,7 +141,7 @@ def run_stage(config) -> None:
     if not execution_error_msg.strip():
         if os.path.exists(error_file_name):
             print("[debugging] Sandbox execution error message was empty. Falling back to static error file.")
-            with open(error_file_name, "r", encoding="utf-8") as f:
+            with open(error_file_name, encoding="utf-8") as f:
                 execution_error_msg = f.read()
         else:
             execution_error_msg = "Unknown execution error."
@@ -170,13 +170,13 @@ def run_stage(config) -> None:
 
     config_path = os.path.join(debug_dir, "config.yaml")
     if os.path.exists(config_path):
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             config_yaml = f.read()
         codes += f"```yaml\n## File name: config.yaml\n{config_yaml}\n```\n\n"
 
     reproduce_path = os.path.join(debug_dir, "reproduce.sh")
     if os.path.exists(reproduce_path):
-        with open(reproduce_path, "r", encoding="utf-8") as f:
+        with open(reproduce_path, encoding="utf-8") as f:
             reproduce_sh = f.read()
         codes += f"```bash\n## File name: reproduce.sh\n{reproduce_sh}\n```\n\n"
 

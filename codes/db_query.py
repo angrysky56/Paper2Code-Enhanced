@@ -9,12 +9,12 @@ API cost/token details, and debugging convergence rates.
 import argparse
 import os
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 
 # Add current folder to path to allow robust imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from db import init_db, Run, StageResult, ExecutionTrial, get_run_summary, get_all_runs, get_session, DB_PATH
+from db import DB_PATH, ExecutionTrial, Run, StageResult, get_all_runs, get_run_summary, get_session, init_db
 
 try:
     from sqlmodel import select
@@ -22,12 +22,11 @@ except ImportError:
     pass
 
 try:
-    from rich.console import Console
-    from rich.table import Table
-    from rich.panel import Panel
-    from rich.text import Text
     from rich import box
-    from rich.align import Align
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
     _RICH_AVAILABLE = True
 except ImportError:
     _RICH_AVAILABLE = False
@@ -39,14 +38,13 @@ def format_duration(started_at, completed_at):
     if not started_at:
         return "N/A"
     try:
-        from datetime import timezone
         if isinstance(started_at, str):
             start = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
         else:
             start = started_at
 
         if not completed_at:
-            end = datetime.now(timezone.utc)
+            end = datetime.now(UTC)
         elif isinstance(completed_at, str):
             end = datetime.fromisoformat(completed_at.replace("Z", "+00:00"))
         else:
@@ -120,7 +118,7 @@ def show_runs_summary():
             )
         console.print(table)
     else:
-        print(f"=== Run Execution History ===")
+        print("=== Run Execution History ===")
         print(f"{'ID':<4} | {'Paper Name':<25} | {'Model':<20} | {'Status':<10} | {'Duration':<10} | {'Cost':<8}")
         print("-" * 88)
         for run in runs:
@@ -158,14 +156,14 @@ def show_run_detail(run_id: int):
         duration = format_duration(summary['started_at'], summary['completed_at'])
 
         info_text = Text()
-        info_text.append(f"Paper Name:    ", style="bold white").append(f"{summary['paper_name']}\n")
-        info_text.append(f"Model Used:    ", style="bold white").append(f"{summary['model_used'] or 'N/A'}\n")
-        info_text.append(f"Executor:      ", style="bold white").append(f"{summary['executor_type'] or 'N/A'}\n")
-        info_text.append(f"Status:        ", style="bold white").append(status_text).append("\n")
-        info_text.append(f"Duration:      ", style="bold white").append(f"{duration}\n")
-        info_text.append(f"Output Dir:    ", style="bold white").append(f"{summary['output_dir'] or 'N/A'}\n")
-        info_text.append(f"Total Cost:    ", style="bold white").append(f"${summary['total_cost']:.5f} USD\n", style="bold green")
-        info_text.append(f"Total Tokens:  ", style="bold white").append(f"Input: {summary['total_tokens_in']:,} | Output: {summary['total_tokens_out']:,}\n")
+        info_text.append("Paper Name:    ", style="bold white").append(f"{summary['paper_name']}\n")
+        info_text.append("Model Used:    ", style="bold white").append(f"{summary['model_used'] or 'N/A'}\n")
+        info_text.append("Executor:      ", style="bold white").append(f"{summary['executor_type'] or 'N/A'}\n")
+        info_text.append("Status:        ", style="bold white").append(status_text).append("\n")
+        info_text.append("Duration:      ", style="bold white").append(f"{duration}\n")
+        info_text.append("Output Dir:    ", style="bold white").append(f"{summary['output_dir'] or 'N/A'}\n")
+        info_text.append("Total Cost:    ", style="bold white").append(f"${summary['total_cost']:.5f} USD\n", style="bold green")
+        info_text.append("Total Tokens:  ", style="bold white").append(f"Input: {summary['total_tokens_in']:,} | Output: {summary['total_tokens_out']:,}\n")
 
         console.print(Panel(info_text, title=f"🔍 Run Details: Run #{run_id}", border_style="cyan", box=box.ROUNDED))
 
@@ -270,7 +268,7 @@ def show_aggregate_stats():
             trials_by_run.setdefault(t.run_id, []).append(t)
 
         resolved_runs_trial_counts = []
-        for rid, run_trials in trials_by_run.items():
+        for _rid, run_trials in trials_by_run.items():
             # If any trial in this run succeeded, how many trials did it take?
             if any(t.success for t in run_trials):
                 # The count of trials in this run

@@ -57,7 +57,6 @@ import argparse
 import json
 import os
 import shutil
-import subprocess
 import sys
 from dataclasses import dataclass, field
 from typing import Literal
@@ -239,7 +238,7 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
             completed_stages.append(current_stage)
         else:
             print(
-                f"[pipeline] Executing planning stage (in-memory)...", file=sys.stderr
+                "[pipeline] Executing planning stage (in-memory)...", file=sys.stderr
             )
             try:
                 planning = load_stage_module("planning", "1_planning.py")
@@ -270,7 +269,7 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
                 file=sys.stderr,
             )
         else:
-            print(f"[pipeline] Extracting config (in-memory)...", file=sys.stderr)
+            print("[pipeline] Extracting config (in-memory)...", file=sys.stderr)
             try:
                 extract = load_stage_module("extract_config", "1.1_extract_config.py")
                 extract.run_stage(config)
@@ -319,7 +318,7 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
             completed_stages.append(current_stage)
         else:
             print(
-                f"[pipeline] Executing analyzing stage (in-memory)...", file=sys.stderr
+                "[pipeline] Executing analyzing stage (in-memory)...", file=sys.stderr
             )
             try:
                 analyzing = load_stage_module("analyzing", "2_analyzing.py")
@@ -352,7 +351,7 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
             )
             completed_stages.append(current_stage)
         else:
-            print(f"[pipeline] Executing coding stage (in-memory)...", file=sys.stderr)
+            print("[pipeline] Executing coding stage (in-memory)...", file=sys.stderr)
             try:
                 coding = load_stage_module("coding", "3_coding.py")
                 coding.run_stage(config)
@@ -393,7 +392,7 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
                 error="Debugging stage requires --error-file to be set.",
             )
 
-        print(f"[pipeline] Executing debugging stage (in-memory)...", file=sys.stderr)
+        print("[pipeline] Executing debugging stage (in-memory)...", file=sys.stderr)
         try:
             debugging = load_stage_module("debugging", "4_debugging.py")
             debugging.run_stage(config)

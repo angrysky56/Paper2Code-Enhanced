@@ -35,11 +35,10 @@ TODO(phase-2): Add a CLI query tool (db_query.py) for inspecting run history / R
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import zlib
-import json
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 # ---------------------------------------------------------------------------
 # Optional SQLModel import — gracefully degrade if not installed yet
@@ -60,7 +59,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 def _utcnow() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _hash_str(s: str) -> str:
@@ -85,13 +84,13 @@ if _SQLMODEL_AVAILABLE:
         Top-level record for a single end-to-end pipeline execution.
         One Run per invocation of run.sh / pipeline.run_pipeline().
         """
-        id: Optional[int] = Field(default=None, primary_key=True)
+        id: int | None = Field(default=None, primary_key=True)
         paper_name: str
         model_used: str
         executor_type: str = "subprocess"
         status: str = "running"          # running | completed | failed | interrupted
         started_at: str = Field(default_factory=_utcnow)
-        completed_at: Optional[str] = None
+        completed_at: str | None = None
         output_dir: str = ""
         notes: str = ""                  # free-form, e.g. git commit or experiment tag
 
@@ -105,7 +104,7 @@ if _SQLMODEL_AVAILABLE:
         One record per LLM call within a pipeline stage.
         Append-only — re-runs create new rows, not updates.
         """
-        id: Optional[int] = Field(default=None, primary_key=True)
+        id: int | None = Field(default=None, primary_key=True)
         run_id: int = Field(foreign_key="run.id")
         stage_name: str                  # planning | analyzing | coding | debugging | rag_config | eval
         input_hash: str = ""             # hash of prompt/messages for dedup / caching analysis
@@ -119,14 +118,14 @@ if _SQLMODEL_AVAILABLE:
         created_at: str = Field(default_factory=_utcnow)
 
         # Store compressed prompt/response snapshots for full RLM replay
-        messages_blob: Optional[bytes] = Field(default=None, nullable=True)
+        messages_blob: bytes | None = Field(default=None, nullable=True)
 
     class ExecutionTrial(SQLModel, table=True):
         """
         One record per sandboxed code execution attempt.
         Used by 4_debugging.py to track iterations and convergence.
         """
-        id: Optional[int] = Field(default=None, primary_key=True)
+        id: int | None = Field(default=None, primary_key=True)
         run_id: int = Field(foreign_key="run.id")
         attempt_num: int = 1
         code_hash: str = ""              # hash of the repo state being tested
@@ -169,7 +168,7 @@ def init_db(quiet: bool = False) -> None:
         print(f"[db] Initialized: {db_path}")
 
 
-def get_session() -> "Session":
+def get_session() -> Session:
     """Return a live SQLModel Session. Use as a context manager."""
     if not _SQLMODEL_AVAILABLE or _engine is None:
         raise RuntimeError("[db] Database not initialized. Call init_db() first.")

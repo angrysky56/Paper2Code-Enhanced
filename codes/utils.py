@@ -336,7 +336,7 @@ def cal_cost(response_json, model_name):
 
 def load_accumulated_cost(accumulated_cost_file):
     if os.path.exists(accumulated_cost_file):
-        with open(accumulated_cost_file, "r", encoding="utf-8") as f:
+        with open(accumulated_cost_file, encoding="utf-8") as f:
             data = json.load(f)
             return data.get("total_cost", 0.0)
     else:
@@ -435,6 +435,12 @@ def num_tokens_from_messages(messages, model="gpt-4o-2024-08-06"):
             "Warning: gpt-4 may update over time. Returning num tokens assuming gpt-4-0613."
         )
         return num_tokens_from_messages(messages, model="gpt-4-0613")
+    elif "minimax" in model.lower() or "claude" in model.lower():
+        print(
+            f"Warning: model {model} not explicitly supported. Using o200k_base encoding as fallback."
+        )
+        tokens_per_message = 3
+        tokens_per_name = 1
     else:
         raise NotImplementedError(
             f"""num_tokens_from_messages() is not implemented for model {model}."""
@@ -500,7 +506,7 @@ def read_all_files(directory, allowed_ext, is_print=True):
                 if file_size > 204800:  # > 200KB
                     print(f"[BIG] {filepath} {file_size}")
 
-                with open(filepath, "r") as file:  # encoding="utf-8"
+                with open(filepath) as file:  # encoding="utf-8"
                     all_files_content[relative_path] = file.read()
             except Exception as e:
                 print(e)
@@ -519,7 +525,7 @@ def read_python_files(directory):
                 relative_path = os.path.relpath(
                     os.path.join(root, filename), directory
                 )  # Preserve directory structure
-                with open(os.path.join(root, filename), "r", encoding="utf-8") as file:
+                with open(os.path.join(root, filename), encoding="utf-8") as file:
                     python_files_content[relative_path] = file.read()
 
     return python_files_content
@@ -600,9 +606,9 @@ def convert_to_anthropic_messages(messages):
                 converted.append({"role": role, "content": content})
             else:
                 converted.append({"role": "user", "content": content})
-                
+
     system_prompt = "\n\n".join(system_parts) if system_parts else None
-    
+
     final_messages = []
     for msg in converted:
         if not final_messages:
@@ -615,7 +621,7 @@ def convert_to_anthropic_messages(messages):
                 last_msg["content"] = last_msg["content"] + "\n\n" + msg["content"]
             else:
                 final_messages.append(msg)
-                
+
     return system_prompt, final_messages
 
 
@@ -627,30 +633,30 @@ def unified_api_call(messages, gpt_version, temperature=0.5, reasoning_effort=No
     """
     model_lower = gpt_version.lower() if gpt_version else ""
     is_minimax = "minimax" in model_lower
-    
+
     try:
         import anthropic
         has_anthropic = True
     except ImportError:
         has_anthropic = False
-        
+
     use_anthropic = has_anthropic and (is_minimax or os.environ.get("ANTHROPIC_API_KEY") is not None)
-    
+
     if use_anthropic:
         api_key = (
-            os.environ.get("ANTHROPIC_API_KEY") 
-            or os.environ.get("LLM_API_KEY") 
+            os.environ.get("ANTHROPIC_API_KEY")
+            or os.environ.get("LLM_API_KEY")
             or os.environ.get("OPENAI_API_KEY")
         )
         base_url = (
-            os.environ.get("ANTHROPIC_BASE_URL") 
-            or os.environ.get("LLM_BASE_URL") 
+            os.environ.get("ANTHROPIC_BASE_URL")
+            or os.environ.get("LLM_BASE_URL")
             or "https://api.minimax.io/anthropic"
         )
-        
+
         client = anthropic.Anthropic(api_key=api_key, base_url=base_url)
         system_prompt, converted_messages = convert_to_anthropic_messages(messages)
-        
+
         kwargs = {
             "model": gpt_version,
             "messages": converted_messages,
@@ -660,11 +666,11 @@ def unified_api_call(messages, gpt_version, temperature=0.5, reasoning_effort=No
             kwargs["system"] = system_prompt
         if temperature is not None:
             kwargs["temperature"] = float(temperature)
-            
+
         choices = []
         for i in range(n):
             message_response = client.messages.create(**kwargs)
-            
+
             text_parts = []
             thinking_parts = []
             for block in message_response.content:
@@ -685,22 +691,22 @@ def unified_api_call(messages, gpt_version, temperature=0.5, reasoning_effort=No
                         print(f"\n[Thinking Block (Choice {i+1})]:\n{t_text}\n")
                     elif b_type == "text":
                         text_parts.append(block.get("text", ""))
-            
+
             final_text = "".join(text_parts)
             if thinking_parts:
                 thinking_str = "".join(thinking_parts)
                 final_text = f"<think>\n{thinking_str}\n</think>\n\n" + final_text
-                
+
             choices.append(MockChoice(final_text, role="assistant"))
-            
+
         return MockCompletion(choices, gpt_version)
     else:
         from openai import OpenAI
-        
+
         api_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
         base_url = os.environ.get("LLM_BASE_URL") or None
         client = OpenAI(api_key=api_key, base_url=base_url)
-        
+
         kwargs = {
             "model": gpt_version,
             "messages": messages,
@@ -711,5 +717,5 @@ def unified_api_call(messages, gpt_version, temperature=0.5, reasoning_effort=No
             kwargs["temperature"] = float(temperature)
         if n > 1:
             kwargs["n"] = n
-            
+
         return client.chat.completions.create(**kwargs)

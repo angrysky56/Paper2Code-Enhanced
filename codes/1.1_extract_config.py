@@ -8,7 +8,6 @@ from utils import content_to_json, extract_planning, format_json_data
 
 
 def run_stage(config) -> None:
-    paper_name = getattr(config, "paper_name", "")
     output_dir = getattr(config, "output_dir", "")
 
     with open(f"{output_dir}/planning_trajectories.json", encoding="utf8") as f:

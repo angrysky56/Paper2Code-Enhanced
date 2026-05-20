@@ -49,7 +49,7 @@ if not os.path.exists(planning_config_path):
 # ---------------------------------------------------------
 # 1. Load original config and call OpenAI to detect names
 # ---------------------------------------------------------
-with open(planning_config_path, "r", encoding="utf-8") as f:
+with open(planning_config_path, encoding="utf-8") as f:
     config_yaml = f.read()
 
 codes = ""

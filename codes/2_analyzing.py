@@ -4,9 +4,11 @@ import json
 import os
 import sys
 
+from db import complete_run, create_run, init_db, write_stage_result
 from dotenv import load_dotenv
 from tqdm import tqdm
 from utils import (
+    cal_cost,
     content_to_json,
     extract_planning,
     load_accumulated_cost,
@@ -14,9 +16,7 @@ from utils import (
     print_response,
     save_accumulated_cost,
     unified_api_call,
-    cal_cost,
 )
-from db import init_db, create_run, write_stage_result, complete_run
 
 load_dotenv()
 
@@ -70,11 +70,11 @@ def run_stage(config) -> None:
         sys.exit(0)
 
     if "Logic Analysis" in task_list:
-        logic_analysis = task_list["Logic Analysis"]
+        pass  # Use task_list["Logic Analysis"] directly below
     elif "logic_analysis" in task_list:
-        logic_analysis = task_list["logic_analysis"]
+        pass  # Use task_list["Logic Analysis"] directly below
     elif "logic analysis" in task_list:
-        logic_analysis = task_list["logic analysis"]
+        pass  # Use task_list["Logic Analysis"] directly below
     else:
         print("[ERROR] 'Logic Analysis' does not exist. Please re-generate the planning.")
         sys.exit(0)

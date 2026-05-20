@@ -261,6 +261,32 @@ uv run python eval.py \
 ============================================
 ```
 
+## 🧪 Testing and Linting
+
+This project uses pytest for unit tests and ruff for linting.
+
+### Running Tests
+
+```bash
+python -m pytest tests/
+```
+
+To run tests with verbose output:
+
+```bash
+python -m pytest tests/ -v
+```
+
+All 10 unit tests should pass.
+
+### Running Linting
+
+```bash
+python -m ruff check codes/
+```
+
+The codebase passes all ruff linting checks.
+
 ## 🤝 Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to the Paper2Code project.
