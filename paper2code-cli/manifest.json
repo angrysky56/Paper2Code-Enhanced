@@ -1,0 +1,27 @@
+{
+  "manifest_version": "0.3",
+  "name": "paper2code-pp-mcp",
+  "display_name": "Paper2code Enhanced Server",
+  "version": "4.9.0",
+  "description": "Paper2code Enhanced Server API surface as MCP tools.",
+  "author": {
+    "name": "CLI Printing Press"
+  },
+  "license": "Apache-2.0",
+  "server": {
+    "type": "binary",
+    "entry_point": "bin/paper2code-pp-mcp",
+    "mcp_config": {
+      "command": "${__dirname}/bin/paper2code-pp-mcp",
+      "args": []
+    }
+  },
+  "compatibility": {
+    "claude_desktop": ">=1.0.0",
+    "platforms": [
+      "darwin",
+      "linux",
+      "win32"
+    ]
+  }
+}

@@ -13,6 +13,8 @@ dependencies = [
     "sqlmodel>=0.0.21",
     "sqlalchemy>=2.0.0",
     "pypdf>=5.0.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
 ]
 
 [project.scripts]

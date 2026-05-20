@@ -1,0 +1,51 @@
+version: 2
+project_name: paper2code-pp-cli
+changelog:
+  disable: true
+builds:
+  - id: paper2code-pp-cli
+    main: ./cmd/paper2code-pp-cli
+    binary: paper2code-pp-cli
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X paper2code-pp-cli/internal/cli.version={{ .Version }}
+    targets:
+      - darwin_amd64
+      - darwin_arm64
+      - linux_amd64
+      - linux_arm64
+      - windows_amd64
+      - windows_arm64
+  - id: paper2code-pp-mcp
+    main: ./cmd/paper2code-pp-mcp
+    binary: paper2code-pp-mcp
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+    targets:
+      - darwin_amd64
+      - darwin_arm64
+      - linux_amd64
+      - linux_arm64
+      - windows_amd64
+      - windows_arm64
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+checksum:
+  name_template: checksums.txt
+brews:
+  - name: paper2code-pp-cli
+    repository:
+      owner: tyler-blaine-hall
+      name: homebrew-tap
+    homepage: "https://github.com/tyler-blaine-hall/paper2code-pp-cli"
+    description: "Local API backend for executing and auditing PaperCoder's academic code generation pipeline."
+    install: |
+      bin.install "paper2code-pp-cli"
+      bin.install "paper2code-pp-mcp"

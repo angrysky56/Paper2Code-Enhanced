@@ -1,0 +1,218 @@
+# Paper2code CLI
+
+Local API backend for executing and auditing PaperCoder's academic code generation pipeline.
+
+Printed by [@angrysky56](https://github.com/angrysky56) (Tyler Blaine Hall).
+
+## Install
+
+The recommended path installs both the `paper2code-pp-cli` binary and the `pp-paper2code` agent skill (Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot, and other agents supported by the upstream [`skills`](https://github.com/vercel-labs/skills) CLI) in one shot:
+
+```bash
+npx -y @mvanhorn/printing-press install paper2code
+```
+
+For CLI only (no skill):
+
+```bash
+npx -y @mvanhorn/printing-press install paper2code --cli-only
+```
+
+For skill only — installs the skill into the same agents as the default command above, but skips the CLI binary (use this to update or reinstall just the skill):
+
+```bash
+npx -y @mvanhorn/printing-press install paper2code --skill-only
+```
+
+To constrain the skill install to one or more specific agents (repeatable — agent names match the [`skills`](https://github.com/vercel-labs/skills) CLI):
+
+```bash
+npx -y @mvanhorn/printing-press install paper2code --agent claude-code
+npx -y @mvanhorn/printing-press install paper2code --agent claude-code --agent codex
+```
+
+### Without Node
+
+The generated install path is category-agnostic until this CLI is published. If `npx` is not available before publish, install Node or use the category-specific Go fallback from the public-library entry after publish.
+
+### Pre-built binary
+
+Download a pre-built binary for your platform from the [latest release](https://github.com/mvanhorn/printing-press-library/releases/tag/paper2code-current). On macOS, clear the Gatekeeper quarantine: `xattr -d com.apple.quarantine <binary>`. On Unix, mark it executable: `chmod +x <binary>`.
+
+<!-- pp-hermes-install-anchor -->
+## Install for Hermes
+
+From the Hermes CLI:
+
+```bash
+hermes skills install mvanhorn/printing-press-library/cli-skills/pp-paper2code --force
+```
+
+Inside a Hermes chat session:
+
+```bash
+/skills install mvanhorn/printing-press-library/cli-skills/pp-paper2code --force
+```
+
+## Install for OpenClaw
+
+Tell your OpenClaw agent (copy this):
+
+```
+Install the pp-paper2code skill from https://github.com/mvanhorn/printing-press-library/tree/main/cli-skills/pp-paper2code. The skill defines how its required CLI can be installed.
+```
+
+## Use with Claude Desktop
+
+This CLI ships an [MCPB](https://github.com/modelcontextprotocol/mcpb) bundle — Claude Desktop's standard format for one-click MCP extension installs (no JSON config required).
+
+To install:
+
+1. Download the `.mcpb` for your platform from the [latest release](https://github.com/mvanhorn/printing-press-library/releases/tag/paper2code-current).
+2. Double-click the `.mcpb` file. Claude Desktop opens and walks you through the install.
+
+Requires Claude Desktop 1.0.0 or later. Pre-built bundles ship for macOS Apple Silicon (`darwin-arm64`) and Windows (`amd64`, `arm64`); for other platforms, use the manual config below.
+
+<details>
+<summary>Manual JSON config (advanced)</summary>
+
+If you can't use the MCPB bundle (older Claude Desktop, unsupported platform), install the MCP binary and configure it manually.
+
+
+Install the MCP binary from this CLI's published public-library entry or pre-built release.
+
+Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "paper2code": {
+      "command": "paper2code-pp-mcp"
+    }
+  }
+}
+```
+
+</details>
+
+## Quick Start
+
+### 1. Install
+
+See [Install](#install) above.
+
+### 2. Verify Setup
+
+```bash
+paper2code-pp-cli doctor
+```
+
+This checks your configuration.
+
+### 3. Try Your First Command
+
+```bash
+paper2code-pp-cli eval --eval-result-dir example-value
+```
+
+## Usage
+
+Run `paper2code-pp-cli --help` for the full command reference and flag list.
+
+## Commands
+
+### eval
+
+Manage eval
+
+- **`paper2code-pp-cli eval`** - Runs programmatic reference-free/reference-based evaluation on the generated repo.
+
+### paper2code-enhanced-server-health
+
+Manage paper2code enhanced server health
+
+- **`paper2code-pp-cli paper2code-enhanced-server-health`** - Health Check
+
+### pdf
+
+Manage pdf
+
+- **`paper2code-pp-cli pdf`** - Processes PDF input into clean, structured S2ORC JSON.
+
+### pipeline
+
+Manage pipeline
+
+- **`paper2code-pp-cli pipeline`** - Starts the PaperCoder pipeline in the background and returns the run ID.
+
+### runs
+
+Manage runs
+
+- **`paper2code-pp-cli runs detail-id-get`** - Queries full status details and stage steps for a specific run ID.
+- **`paper2code-pp-cli runs list-get`** - Queries all run records from the SQLite database.
+
+### stats
+
+Manage stats
+
+- **`paper2code-pp-cli stats`** - Calculates global performance convergence rates, costs, and token consumption aggregates.
+
+
+## Output Formats
+
+```bash
+# Human-readable table (default in terminal, JSON when piped)
+paper2code-pp-cli eval --eval-result-dir example-value
+
+# JSON for scripting and agents
+paper2code-pp-cli eval --eval-result-dir example-value --json
+
+# Filter to specific fields
+paper2code-pp-cli eval --eval-result-dir example-value --json --select id,name,status
+
+# Dry run — show the request without sending
+paper2code-pp-cli eval --eval-result-dir example-value --dry-run
+
+# Agent mode — JSON + compact + no prompts in one flag
+paper2code-pp-cli eval --eval-result-dir example-value --agent
+```
+
+## Agent Usage
+
+This CLI is designed for AI agent consumption:
+
+- **Non-interactive** - never prompts, every input is a flag
+- **Pipeable** - `--json` output to stdout, errors to stderr
+- **Filterable** - `--select id,name` returns only fields you need
+- **Previewable** - `--dry-run` shows the request without sending
+- **Explicit retries** - add `--idempotent` to create retries when a no-op success is acceptable
+- **Confirmable** - `--yes` for explicit confirmation of destructive actions
+- **Piped input** - write commands can accept structured input when their help lists `--stdin`
+- **Offline-friendly** - sync/search commands can use the local SQLite store when available
+- **Agent-safe by default** - no colors or formatting unless `--human-friendly` is set
+
+Exit codes: `0` success, `2` usage error, `3` not found, `5` API error, `7` rate limited, `10` config error.
+
+## Health Check
+
+```bash
+paper2code-pp-cli doctor
+```
+
+Verifies configuration and connectivity to the API.
+
+## Configuration
+
+Config file: `~/.config/paper2code-enhanced-server-pp-cli/config.toml`
+
+Static request headers can be configured under `headers`; per-command header overrides take precedence.
+
+## Troubleshooting
+**Not found errors (exit code 3)**
+- Check the resource ID is correct
+- Run the `list` command to see available items
+
+---
+
+Generated by [CLI Printing Press](https://github.com/mvanhorn/cli-printing-press)

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-20T20:30:44.239604166Z",
+  "printing_press_version": "4.9.0",
+  "api_name": "paper2code",
+  "display_name": "Paper2code Enhanced Server",
+  "cli_name": "paper2code-pp-cli",
+  "owner": "tyler-blaine-hall",
+  "printer": "angrysky56",
+  "printer_name": "Tyler Blaine Hall",
+  "spec_path": "/home/ty/Repositories/ai_workspace/Paper2Code-Enhanced/openapi.json",
+  "spec_format": "openapi3",
+  "spec_checksum": "sha256:b3471959d3bc41e58a3abd331d907b156c245fddfdcc2936f655a8cbf0885ee7",
+  "run_id": "20260520-203044",
+  "mcp_binary": "paper2code-pp-mcp",
+  "mcp_tool_count": 7,
+  "mcp_public_tool_count": 7,
+  "mcp_ready": "full",
+  "api_version": "0.1.0",
+  "auth_type": "none"
+}

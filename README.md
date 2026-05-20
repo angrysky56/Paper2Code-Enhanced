@@ -15,6 +15,7 @@ Our method outperforms strong baselines on both Paper2Code and PaperBench and pr
 ## 🗺️ Table of Contents
 
 - [⚡ Quick Start](#-quick-start)
+- [🖥️ Go CLI & MCP Server (Agent-Native)](#️-go-cli--mcp-server-agent-native)
 - [📚 Detailed Setup Instructions](#-detailed-setup-instructions)
 - [📦 Paper2Code Benchmark Datasets](#-paper2code-benchmark-datasets)
 - [📊 Model-based Evaluation of Repositories](#-model-based-evaluation-of-repositories-generated-by-papercoder)
@@ -111,6 +112,59 @@ outputs
 │   └── accumulated_cost.json
 └── Transformer_repo # Final output repository
 ```
+
+---
+
+## 🖥️ Go CLI & MCP Server (Agent-Native)
+
+`Paper2Code-Enhanced` includes a high-fidelity, agent-native Go Cobra CLI (`paper2code-pp-cli`) and a Model Context Protocol (MCP) server (`paper2code-pp-mcp`) generated using the **CLI Printing Press**. 
+
+This interface allows you to run, monitor, and audit the entire multi-agent code generation pipeline programmatically, from any shell or directly inside LLM clients like Cursor or Claude Desktop.
+
+### 1. Launch the FastAPI Backend Server
+The Go CLI interacts with a local FastAPI backend wrapper (`codes/server.py`). To start it on port `8099`, simply run:
+```bash
+./scripts/server.sh
+```
+
+### 2. Configure the CLI
+The CLI reads configuration from `~/.config/paper2code-pp-cli/config.toml`. It is automatically configured to talk to your local backend server:
+```toml
+base_url = "http://127.0.0.1:8099"
+```
+
+### 3. Build & Run the Go CLI
+Compile the Cobra CLI and verify connectivity:
+```bash
+# Verify health and database connection
+./paper2code-cli/build/stage/bin/paper2code-pp-cli doctor
+
+# Run health check
+./paper2code-cli/build/stage/bin/paper2code-pp-cli paper2code-enhanced-server-health check-get
+
+# List all historical runs stored in the SQLite database (rendered as a gorgeous aligned table!)
+./paper2code-cli/build/stage/bin/paper2code-pp-cli runs list-get
+
+# List runs in compact JSON format for agent piping
+./paper2code-cli/build/stage/bin/paper2code-pp-cli runs list-get --json --compact
+
+# Get cumulative resource footprints & debugging convergence analytics
+./paper2code-cli/build/stage/bin/paper2code-pp-cli stats get
+```
+
+### 4. Integrate the MCP Server
+To plug `Paper2Code-Enhanced` into your AI tools (e.g. Cursor, Claude Desktop), add the following to your MCP settings file:
+```json
+{
+  "mcpServers": {
+    "paper2code": {
+      "command": "/home/ty/Repositories/ai_workspace/Paper2Code-Enhanced/paper2code-cli/build/stage/bin/paper2code-pp-mcp",
+      "env": {}
+    }
+  }
+}
+```
+This exposes full academic PDF cleaning, pipeline execution, SQL auditing, and evaluation directly to AI agents.
 
 ---
 

@@ -1,0 +1,952 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Paper2Code-Enhanced API Server",
+    "description": "Local API backend for executing and auditing PaperCoder's academic code generation pipeline.",
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Local development server"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pdf/process": {
+      "post": {
+        "summary": "Process Pdf",
+        "description": "Processes PDF input into clean, structured S2ORC JSON.",
+        "operationId": "process_pdf_pdf_process_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PDFProcessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PDFProcessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pipeline/run": {
+      "post": {
+        "summary": "Run Pipeline Endpoint",
+        "description": "Starts the PaperCoder pipeline in the background and returns the run ID.",
+        "operationId": "run_pipeline_endpoint_pipeline_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PipelineRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/eval/run": {
+      "post": {
+        "summary": "Run Evaluation",
+        "description": "Runs programmatic reference-free/reference-based evaluation on the generated repo.",
+        "operationId": "run_evaluation_eval_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvalRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvalRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs": {
+      "get": {
+        "summary": "List Runs",
+        "description": "Queries all run records from the SQLite database.",
+        "operationId": "list_runs_runs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RunListItem"
+                  },
+                  "type": "array",
+                  "title": "Response List Runs Runs Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}": {
+      "get": {
+        "summary": "Run Detail",
+        "description": "Queries full status details and stage steps for a specific run ID.",
+        "operationId": "run_detail_runs__run_id__get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats": {
+      "get": {
+        "summary": "Aggregate Stats",
+        "description": "Calculates global performance convergence rates, costs, and token consumption aggregates.",
+        "operationId": "aggregate_stats_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "EvalRunRequest": {
+        "properties": {
+          "paper_name": {
+            "type": "string",
+            "title": "Paper Name",
+            "description": "Name of the paper."
+          },
+          "pdf_json_path": {
+            "type": "string",
+            "title": "Pdf Json Path",
+            "description": "Path to the PDF-based JSON."
+          },
+          "data_dir": {
+            "type": "string",
+            "title": "Data Dir",
+            "description": "Data directory path.",
+            "default": "../data"
+          },
+          "output_dir": {
+            "type": "string",
+            "title": "Output Dir",
+            "description": "Artifact directory of the pipeline."
+          },
+          "target_repo_dir": {
+            "type": "string",
+            "title": "Target Repo Dir",
+            "description": "Generated repository directory."
+          },
+          "gold_repo_dir": {
+            "type": "string",
+            "title": "Gold Repo Dir",
+            "description": "Official gold repository directory.",
+            "default": ""
+          },
+          "eval_result_dir": {
+            "type": "string",
+            "title": "Eval Result Dir",
+            "description": "Directory to save evaluation results."
+          },
+          "eval_type": {
+            "type": "string",
+            "enum": [
+              "ref_free",
+              "ref_based"
+            ],
+            "title": "Eval Type",
+            "description": "Evaluation type.",
+            "default": "ref_free"
+          },
+          "generated_n": {
+            "type": "integer",
+            "title": "Generated N",
+            "description": "Number of evaluation samples to average.",
+            "default": 8
+          },
+          "gpt_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpt Version",
+            "description": "Model choice override."
+          },
+          "papercoder": {
+            "type": "boolean",
+            "title": "Papercoder",
+            "description": "Evaluate as PaperCoder generated repo.",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "paper_name",
+          "pdf_json_path",
+          "output_dir",
+          "target_repo_dir",
+          "eval_result_dir"
+        ],
+        "title": "EvalRunRequest"
+      },
+      "EvalRunResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "paper_name": {
+            "type": "string",
+            "title": "Paper Name"
+          },
+          "eval_type": {
+            "type": "string",
+            "title": "Eval Type"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "valid_samples": {
+            "type": "string",
+            "title": "Valid Samples"
+          },
+          "output_file": {
+            "type": "string",
+            "title": "Output File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "paper_name",
+          "eval_type",
+          "score",
+          "valid_samples",
+          "output_file"
+        ],
+        "title": "EvalRunResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "ok"
+          },
+          "db_path": {
+            "type": "string",
+            "title": "Db Path"
+          },
+          "db_available": {
+            "type": "boolean",
+            "title": "Db Available"
+          }
+        },
+        "type": "object",
+        "required": [
+          "db_path",
+          "db_available"
+        ],
+        "title": "HealthResponse"
+      },
+      "PDFProcessRequest": {
+        "properties": {
+          "input_json_path": {
+            "type": "string",
+            "title": "Input Json Path",
+            "description": "Path to input PDF or Grobid JSON."
+          },
+          "output_json_path": {
+            "type": "string",
+            "title": "Output Json Path",
+            "description": "Path to save processed and cleaned JSON."
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode",
+            "description": "Processing mode: auto, vlm, olmocr, local.",
+            "default": "auto"
+          },
+          "gpt_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpt Version",
+            "description": "VLM model choice override."
+          },
+          "paper_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paper Name",
+            "description": "Name of the paper."
+          }
+        },
+        "type": "object",
+        "required": [
+          "input_json_path",
+          "output_json_path"
+        ],
+        "title": "PDFProcessRequest"
+      },
+      "PDFProcessResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "output_json_path": {
+            "type": "string",
+            "title": "Output Json Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message",
+          "output_json_path"
+        ],
+        "title": "PDFProcessResponse"
+      },
+      "PipelineRunRequest": {
+        "properties": {
+          "paper_name": {
+            "type": "string",
+            "title": "Paper Name",
+            "description": "Name of the paper."
+          },
+          "pdf_json_path": {
+            "type": "string",
+            "title": "Pdf Json Path",
+            "description": "Path to the PDF-based JSON format."
+          },
+          "output_dir": {
+            "type": "string",
+            "title": "Output Dir",
+            "description": "Directory to save generated artifacts."
+          },
+          "output_repo_dir": {
+            "type": "string",
+            "title": "Output Repo Dir",
+            "description": "Directory to save final output repository."
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "Model override (e.g. MiniMax-M2.7)."
+          },
+          "run_planning": {
+            "type": "boolean",
+            "title": "Run Planning",
+            "description": "Execute planning stage.",
+            "default": true
+          },
+          "run_analyzing": {
+            "type": "boolean",
+            "title": "Run Analyzing",
+            "description": "Execute analyzing stage.",
+            "default": true
+          },
+          "run_coding": {
+            "type": "boolean",
+            "title": "Run Coding",
+            "description": "Execute coding stage.",
+            "default": true
+          },
+          "run_debugging": {
+            "type": "boolean",
+            "title": "Run Debugging",
+            "description": "Execute debugging stage.",
+            "default": false
+          },
+          "error_file_path": {
+            "type": "string",
+            "title": "Error File Path",
+            "description": "Path to error message file for debugging.",
+            "default": ""
+          },
+          "debug_save_num": {
+            "type": "integer",
+            "title": "Debug Save Num",
+            "description": "Backups index for debugging.",
+            "default": 1
+          },
+          "paper_format": {
+            "type": "string",
+            "enum": [
+              "JSON",
+              "LaTeX"
+            ],
+            "title": "Paper Format",
+            "description": "Input paper format.",
+            "default": "JSON"
+          },
+          "pdf_latex_path": {
+            "type": "string",
+            "title": "Pdf Latex Path",
+            "description": "Path to LaTeX source files if paper-format is LaTeX.",
+            "default": ""
+          },
+          "resume": {
+            "type": "boolean",
+            "title": "Resume",
+            "description": "Resume from an interrupted or failed run.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "paper_name",
+          "pdf_json_path",
+          "output_dir",
+          "output_repo_dir"
+        ],
+        "title": "PipelineRunRequest"
+      },
+      "PipelineRunResponse": {
+        "properties": {
+          "run_id": {
+            "type": "integer",
+            "title": "Run Id"
+          },
+          "paper_name": {
+            "type": "string",
+            "title": "Paper Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "paper_name",
+          "status",
+          "message"
+        ],
+        "title": "PipelineRunResponse"
+      },
+      "RunDetailResponse": {
+        "properties": {
+          "run_id": {
+            "type": "integer",
+            "title": "Run Id"
+          },
+          "paper_name": {
+            "type": "string",
+            "title": "Paper Name"
+          },
+          "model_used": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Used"
+          },
+          "executor_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executor Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "started_at": {
+            "type": "string",
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "output_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Dir"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "total_cost": {
+            "type": "number",
+            "title": "Total Cost"
+          },
+          "total_tokens_in": {
+            "type": "integer",
+            "title": "Total Tokens In"
+          },
+          "total_tokens_out": {
+            "type": "integer",
+            "title": "Total Tokens Out"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/RunStageSummary"
+            },
+            "type": "array",
+            "title": "Stages"
+          },
+          "trials": {
+            "items": {
+              "$ref": "#/components/schemas/RunTrialSummary"
+            },
+            "type": "array",
+            "title": "Trials"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "paper_name",
+          "model_used",
+          "executor_type",
+          "status",
+          "started_at",
+          "completed_at",
+          "output_dir",
+          "notes",
+          "total_cost",
+          "total_tokens_in",
+          "total_tokens_out",
+          "stages",
+          "trials"
+        ],
+        "title": "RunDetailResponse"
+      },
+      "RunListItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "paper_name": {
+            "type": "string",
+            "title": "Paper Name"
+          },
+          "model_used": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Used"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "started_at": {
+            "type": "string",
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "total_cost": {
+            "type": "number",
+            "title": "Total Cost"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "paper_name",
+          "model_used",
+          "status",
+          "started_at",
+          "completed_at",
+          "total_cost"
+        ],
+        "title": "RunListItem"
+      },
+      "RunStageSummary": {
+        "properties": {
+          "stage_name": {
+            "type": "string",
+            "title": "Stage Name"
+          },
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "tokens_in": {
+            "type": "integer",
+            "title": "Tokens In"
+          },
+          "tokens_out": {
+            "type": "integer",
+            "title": "Tokens Out"
+          },
+          "cost_usd": {
+            "type": "number",
+            "title": "Cost Usd"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stage_name",
+          "success",
+          "tokens_in",
+          "tokens_out",
+          "cost_usd",
+          "created_at"
+        ],
+        "title": "RunStageSummary"
+      },
+      "RunTrialSummary": {
+        "properties": {
+          "attempt_num": {
+            "type": "integer",
+            "title": "Attempt Num"
+          },
+          "returncode": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Returncode"
+          },
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "elapsed_seconds": {
+            "type": "number",
+            "title": "Elapsed Seconds"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempt_num",
+          "returncode",
+          "success",
+          "elapsed_seconds",
+          "created_at"
+        ],
+        "title": "RunTrialSummary"
+      },
+      "StatsResponse": {
+        "properties": {
+          "total_runs": {
+            "type": "integer",
+            "title": "Total Runs"
+          },
+          "completed_runs": {
+            "type": "integer",
+            "title": "Completed Runs"
+          },
+          "failed_runs": {
+            "type": "integer",
+            "title": "Failed Runs"
+          },
+          "running_runs": {
+            "type": "integer",
+            "title": "Running Runs"
+          },
+          "total_tokens_in": {
+            "type": "integer",
+            "title": "Total Tokens In"
+          },
+          "total_tokens_out": {
+            "type": "integer",
+            "title": "Total Tokens Out"
+          },
+          "total_cost_usd": {
+            "type": "number",
+            "title": "Total Cost Usd"
+          },
+          "total_trials": {
+            "type": "integer",
+            "title": "Total Trials"
+          },
+          "debug_convergence_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debug Convergence Rate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_runs",
+          "completed_runs",
+          "failed_runs",
+          "running_runs",
+          "total_tokens_in",
+          "total_tokens_out",
+          "total_cost_usd",
+          "total_trials",
+          "debug_convergence_rate"
+        ],
+        "title": "StatsResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
