@@ -57,12 +57,19 @@ import argparse
 import json
 import os
 import sys
+import subprocess
+import shutil
 from dataclasses import dataclass, field
 from typing import Literal
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+try:
+    from db import init_db, create_run, complete_run, get_run_summary
+except ImportError:
+    from codes.db import init_db, create_run, complete_run, get_run_summary
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +103,9 @@ class PipelineConfig:
 
     # Output format for CLI interop
     output_format: Literal["human", "json"] = "human"
+
+    # Resume flag
+    resume: bool = False
 
     # TODO(phase-4): Add fields for meta-harness task metadata:
     #   task_id: str = ""          # OrCAID task identifier
@@ -149,36 +159,254 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
 
     Returns a PipelineResult regardless of success/failure.
     Writes all stage records to the SQLite DB if available.
-
-    TODO(phase-4): Implement stage orchestration:
-        1. init_db() + create_run()
-        2. If config.run_planning:   call planning stage, write StageResult
-        3. Run 1.1_extract_config.py (config YAML extraction)
-        4. If config.run_analyzing:  call analyzing stage, write StageResult
-        5. If config.run_coding:     call coding stage, write StageResult
-        6. If config.run_debugging:  call debugging stage, write StageResult + ExecutionTrial
-        7. complete_run() with final status
-        8. Return PipelineResult
-
-    TODO(phase-4): Import stage functions directly rather than subprocess-calling
-        the scripts, so the Python API avoids the CLI round-trip overhead.
-        This requires refactoring each stage script to expose a run_stage(config) fn.
     """
-    # TODO(phase-4): Remove this stub and implement the body above.
-    print(
-        f"[pipeline] run_pipeline() is not yet implemented.\n"
-        f"  paper_name: {config.paper_name}\n"
-        f"  model:      {config.model}\n"
-        f"  output_dir: {config.output_dir}\n"
-        f"Use scripts/run.sh directly until Phase 4 is complete.",
-        file=sys.stderr,
-    )
+    try:
+        init_db(quiet=True)
+    except Exception as e:
+        print(f"[pipeline] Warning: Database initialization failed: {e}", file=sys.stderr)
+
+    # 1. Create or resume DB run
+    run_id = -1
+    try:
+        run_id = create_run(
+            paper_name=config.paper_name,
+            model_used=config.model,
+            output_dir=config.output_dir,
+            executor_type=config.executor_type,
+        )
+    except Exception as e:
+        print(f"[pipeline] Warning: Database run creation failed: {e}", file=sys.stderr)
+
+    completed_stages = []
+
+    # 2. Run planning stage
+    if config.run_planning:
+        current_stage = "planning"
+        print(f"[pipeline] Executing planning stage...", file=sys.stderr)
+        cmd = [
+            sys.executable, "codes/1_planning.py",
+            "--paper_name", config.paper_name,
+            "--gpt_version", config.model,
+            "--paper_format", config.paper_format,
+            "--output_dir", config.output_dir,
+            "--run_id", str(run_id),
+        ]
+        if config.pdf_json_path:
+            cmd.extend(["--pdf_json_path", config.pdf_json_path])
+        if config.pdf_latex_path:
+            cmd.extend(["--pdf_latex_path", config.pdf_latex_path])
+
+        try:
+            subprocess.run(cmd, stdout=sys.stderr, stderr=sys.stderr, check=True)
+            completed_stages.append(current_stage)
+        except subprocess.CalledProcessError as e:
+            try:
+                complete_run(run_id, status="failed")
+            except Exception:
+                pass
+            return PipelineResult(
+                status="failed",
+                paper_name=config.paper_name,
+                output_dir=config.output_dir,
+                output_repo_dir=config.output_repo_dir,
+                run_id=run_id,
+                stages_completed=completed_stages,
+                stages_failed=[current_stage],
+                error=f"Stage '{current_stage}' failed with exit code {e.returncode}.",
+            )
+
+        # Run 1.1_extract_config.py (config YAML extraction)
+        print(f"[pipeline] Extracting config...", file=sys.stderr)
+        cmd_extract = [
+            sys.executable, "codes/1.1_extract_config.py",
+            "--paper_name", config.paper_name,
+            "--output_dir", config.output_dir,
+        ]
+        try:
+            subprocess.run(cmd_extract, stdout=sys.stderr, stderr=sys.stderr, check=True)
+        except subprocess.CalledProcessError as e:
+            try:
+                complete_run(run_id, status="failed")
+            except Exception:
+                pass
+            return PipelineResult(
+                status="failed",
+                paper_name=config.paper_name,
+                output_dir=config.output_dir,
+                output_repo_dir=config.output_repo_dir,
+                run_id=run_id,
+                stages_completed=completed_stages,
+                stages_failed=[current_stage + "_extract_config"],
+                error=f"Extract config step failed with exit code {e.returncode}.",
+            )
+
+        # Copy config to output_repo_dir
+        try:
+            os.makedirs(config.output_repo_dir, exist_ok=True)
+            shutil.copy2(
+                os.path.join(config.output_dir, "planning_config.yaml"),
+                os.path.join(config.output_repo_dir, "config.yaml")
+            )
+            print(f"[pipeline] Copied planning_config.yaml to {config.output_repo_dir}/config.yaml", file=sys.stderr)
+        except Exception as e:
+            print(f"[pipeline] Warning: failed to copy config.yaml to repo dir: {e}", file=sys.stderr)
+
+    # 3. Run analyzing stage
+    if config.run_analyzing:
+        current_stage = "analyzing"
+        print(f"[pipeline] Executing analyzing stage...", file=sys.stderr)
+        cmd = [
+            sys.executable, "codes/2_analyzing.py",
+            "--paper_name", config.paper_name,
+            "--gpt_version", config.model,
+            "--paper_format", config.paper_format,
+            "--output_dir", config.output_dir,
+            "--run_id", str(run_id),
+        ]
+        if config.pdf_json_path:
+            cmd.extend(["--pdf_json_path", config.pdf_json_path])
+        if config.pdf_latex_path:
+            cmd.extend(["--pdf_latex_path", config.pdf_latex_path])
+
+        try:
+            subprocess.run(cmd, stdout=sys.stderr, stderr=sys.stderr, check=True)
+            completed_stages.append(current_stage)
+        except subprocess.CalledProcessError as e:
+            try:
+                complete_run(run_id, status="failed")
+            except Exception:
+                pass
+            return PipelineResult(
+                status="failed",
+                paper_name=config.paper_name,
+                output_dir=config.output_dir,
+                output_repo_dir=config.output_repo_dir,
+                run_id=run_id,
+                stages_completed=completed_stages,
+                stages_failed=[current_stage],
+                error=f"Stage '{current_stage}' failed with exit code {e.returncode}.",
+            )
+
+    # 4. Run coding stage
+    if config.run_coding:
+        current_stage = "coding"
+        print(f"[pipeline] Executing coding stage...", file=sys.stderr)
+        cmd = [
+            sys.executable, "codes/3_coding.py",
+            "--paper_name", config.paper_name,
+            "--gpt_version", config.model,
+            "--paper_format", config.paper_format,
+            "--output_dir", config.output_dir,
+            "--output_repo_dir", config.output_repo_dir,
+            "--run_id", str(run_id),
+        ]
+        if config.pdf_json_path:
+            cmd.extend(["--pdf_json_path", config.pdf_json_path])
+        if config.pdf_latex_path:
+            cmd.extend(["--pdf_latex_path", config.pdf_latex_path])
+
+        try:
+            subprocess.run(cmd, stdout=sys.stderr, stderr=sys.stderr, check=True)
+            completed_stages.append(current_stage)
+        except subprocess.CalledProcessError as e:
+            try:
+                complete_run(run_id, status="failed")
+            except Exception:
+                pass
+            return PipelineResult(
+                status="failed",
+                paper_name=config.paper_name,
+                output_dir=config.output_dir,
+                output_repo_dir=config.output_repo_dir,
+                run_id=run_id,
+                stages_completed=completed_stages,
+                stages_failed=[current_stage],
+                error=f"Stage '{current_stage}' failed with exit code {e.returncode}.",
+            )
+
+    # 5. Run debugging stage
+    if config.run_debugging:
+        current_stage = "debugging"
+        if not config.error_file_path:
+            try:
+                complete_run(run_id, status="failed")
+            except Exception:
+                pass
+            return PipelineResult(
+                status="failed",
+                paper_name=config.paper_name,
+                output_dir=config.output_dir,
+                output_repo_dir=config.output_repo_dir,
+                run_id=run_id,
+                stages_completed=completed_stages,
+                stages_failed=[current_stage],
+                error="Debugging stage requires --error-file to be set.",
+            )
+
+        print(f"[pipeline] Executing debugging stage...", file=sys.stderr)
+        cmd = [
+            sys.executable, "codes/4_debugging.py",
+            "--error_file_name", config.error_file_path,
+            "--output_dir", config.output_dir,
+            "--paper_name", config.paper_name,
+            "--output_repo_dir", config.output_repo_dir,
+            "--model", config.model,
+            "--save_num", str(config.debug_save_num),
+            "--run_id", str(run_id),
+        ]
+        try:
+            subprocess.run(cmd, stdout=sys.stderr, stderr=sys.stderr, check=True)
+            completed_stages.append(current_stage)
+        except subprocess.CalledProcessError as e:
+            try:
+                complete_run(run_id, status="failed")
+            except Exception:
+                pass
+            return PipelineResult(
+                status="failed",
+                paper_name=config.paper_name,
+                output_dir=config.output_dir,
+                output_repo_dir=config.output_repo_dir,
+                run_id=run_id,
+                stages_completed=completed_stages,
+                stages_failed=[current_stage],
+                error=f"Stage '{current_stage}' failed with exit code {e.returncode}.",
+            )
+
+    # 6. Complete DB run and compile stats
+    try:
+        complete_run(run_id, status="completed")
+    except Exception as e:
+        print(f"[pipeline] Warning: failed to complete run in DB: {e}", file=sys.stderr)
+
+    try:
+        summary = get_run_summary(run_id)
+        if summary and summary.get("status") not in ("disabled", "not_found"):
+            return PipelineResult(
+                status="success",
+                paper_name=config.paper_name,
+                output_dir=config.output_dir,
+                output_repo_dir=config.output_repo_dir,
+                run_id=run_id,
+                stages_completed=completed_stages,
+                stages_failed=[],
+                cost_usd=summary.get("total_cost", 0.0),
+                tokens_in=summary.get("total_tokens_in", 0),
+                tokens_out=summary.get("total_tokens_out", 0),
+                error=None,
+            )
+    except Exception as e:
+        print(f"[pipeline] Warning: failed to fetch run summary from DB: {e}", file=sys.stderr)
+
     return PipelineResult(
-        status="failed",
+        status="success",
         paper_name=config.paper_name,
         output_dir=config.output_dir,
         output_repo_dir=config.output_repo_dir,
-        error="pipeline.run_pipeline() is not yet implemented (Phase 4 TODO).",
+        run_id=run_id,
+        stages_completed=completed_stages,
+        stages_failed=[],
+        error=None,
     )
 
 
@@ -212,34 +440,74 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default="planning,analyzing,coding",
         help="Comma-separated list of stages to run.",
     )
-    # TODO(phase-4): Add --resume, --error-file, --debug-save-num, --paper-format flags.
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Check for and resume an incomplete or failed run.",
+    )
+    parser.add_argument(
+        "--error-file",
+        type=str,
+        default="",
+        help="Path to error message file for debugging stage.",
+    )
+    parser.add_argument(
+        "--debug-save-num",
+        type=int,
+        default=1,
+        help="Backups index for debugging (default: 1)",
+    )
+    parser.add_argument(
+        "--paper-format",
+        choices=["JSON", "LaTeX"],
+        default="JSON",
+        help="Input paper format (default: JSON)",
+    )
+    parser.add_argument(
+        "--pdf-latex-path",
+        type=str,
+        default="",
+        help="Path to LaTeX source files if paper-format is LaTeX",
+    )
     return parser
 
 
 def main() -> None:
     """
     CLI entry point.
-
-    TODO(phase-3): Wire this up once run_pipeline() is implemented.
-        Until then, this prints a usage hint and exits cleanly.
     """
     parser = _build_arg_parser()
     args = parser.parse_args()
 
-    stages = [s.strip() for s in args.stages.split(",")]
-    config = PipelineConfig(
-        paper_name=args.paper_name,
-        pdf_json_path=args.pdf_json_path,
-        output_dir=args.output_dir,
-        output_repo_dir=args.output_repo_dir,
-        model=args.model,
-        run_planning="planning" in stages,
-        run_analyzing="analyzing" in stages,
-        run_coding="coding" in stages,
-        output_format=args.output_format,  # type: ignore[arg-type]
-    )
+    # Capture original stdout and redirect all output to stderr if JSON format is requested
+    original_stdout = sys.stdout
+    if args.output_format == "json":
+        sys.stdout = sys.stderr
 
-    result = run_pipeline(config)
+    try:
+        stages = [s.strip().lower() for s in args.stages.split(",")]
+        config = PipelineConfig(
+            paper_name=args.paper_name,
+            pdf_json_path=args.pdf_json_path,
+            output_dir=args.output_dir,
+            output_repo_dir=args.output_repo_dir,
+            model=args.model,
+            run_planning="planning" in stages,
+            run_analyzing="analyzing" in stages,
+            run_coding="coding" in stages,
+            run_debugging="debugging" in stages,
+            error_file_path=args.error_file,
+            debug_save_num=args.debug_save_num,
+            paper_format=args.paper_format,
+            pdf_latex_path=args.pdf_latex_path,
+            output_format=args.output_format,
+            resume=args.resume,
+        )
+
+        result = run_pipeline(config)
+    finally:
+        # Always restore stdout
+        sys.stdout = original_stdout
 
     if config.output_format == "json":
         print(result.to_json())

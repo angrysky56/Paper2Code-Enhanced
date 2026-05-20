@@ -7,8 +7,8 @@ This roadmap lays out the four key modernization phases to transition the **Pape
 ## Phases
 
 - [x] **Phase 1: Sandboxed Code Execution** - Secure generated PyTorch code execution using restricted Subprocess and Docker runtimes.
-- [ ] **Phase 2: Database Persistence & RLM Logging** - Append-only SQLite/SQLModel logging of Runs, StageResults, and ExecutionTrials.
-- [ ] **Phase 3: Structured CLI Interoperability** - Format CLI output to dump machine-readable JSON to `stdout` and redirect logging to `stderr`.
+- [x] **Phase 2: Database Persistence & RLM Logging** - Append-only SQLite/SQLModel logging of Runs, StageResults, and ExecutionTrials.
+- [x] **Phase 3: Structured CLI Interoperability** - Format CLI output to dump machine-readable JSON to `stdout` and redirect logging to `stderr`.
 - [ ] **Phase 4: Programmatic Pipeline Orchestration** - Refactor and unify all reasoning stage functions in-memory and register a global CLI wrapper.
 
 ## Phase Details
@@ -45,10 +45,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 02-01: Finalize SQLModel SQLite engine wiring and verify schema initialization
-- [ ] 02-02: Wire `init_db()` and `write_stage_result()` logging into planning, analyzing, and coding scripts
-- [ ] 02-03: Wire `write_execution_trial()` logging into the debugging loop
-- [ ] 02-04: Implement run-resume query logic and build the `db_query.py` analytics tool
+- [x] 02-01: Finalize SQLModel SQLite engine wiring and verify schema initialization
+- [x] 02-02: Wire `init_db()` and `write_stage_result()` logging into planning, analyzing, and coding scripts
+- [x] 02-03: Wire `write_execution_trial()` logging into the debugging loop
+- [x] 02-04: Implement run-resume query logic and build the `db_query.py` analytics tool
 
 ### Phase 3: Structured CLI Interoperability
 **Goal**: Standardize CLI outputs for programmatic integration into meta-harness.
@@ -62,7 +62,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 03-01: Standardize CLI arg parser, separate `stdout` vs `stderr` streams, and emit structured JSON results
+- [x] 03-01: Standardize CLI arg parser, separate `stdout` vs `stderr` streams, and emit structured JSON results
 
 ### Phase 4: Programmatic Pipeline Orchestration
 **Goal**: Package the entire execution pipeline as a clean Python library and global executable.
@@ -87,6 +87,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Sandboxed Code Execution | 3/3 | Completed | 2026-05-19 |
-| 2. Database Persistence & RLM Logging | 0/4 | Not started | - |
-| 3. Structured CLI Interoperability | 0/1 | Not started | - |
-| 4. Programmatic Pipeline Orchestration | 0/2 | Not started | - |
+| 2. Database Persistence & RLM Logging | 4/4 | Completed | 2026-05-19 |
+| 3. Structured CLI Interoperability | 1/1 | Completed | 2026-05-20 |
+| 4. Programmatic Pipeline Orchestration | 0/2 | Active | - |
