@@ -9,7 +9,7 @@ This roadmap lays out the four key modernization phases to transition the **Pape
 - [x] **Phase 1: Sandboxed Code Execution** - Secure generated PyTorch code execution using restricted Subprocess and Docker runtimes.
 - [x] **Phase 2: Database Persistence & RLM Logging** - Append-only SQLite/SQLModel logging of Runs, StageResults, and ExecutionTrials.
 - [x] **Phase 3: Structured CLI Interoperability** - Format CLI output to dump machine-readable JSON to `stdout` and redirect logging to `stderr`.
-- [ ] **Phase 4: Programmatic Pipeline Orchestration** - Refactor and unify all reasoning stage functions in-memory and register a global CLI wrapper.
+- [x] **Phase 4: Programmatic Pipeline Orchestration** - Refactor and unify all reasoning stage functions in-memory and register a global CLI wrapper.
 
 ## Phase Details
 
@@ -76,8 +76,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: Refactor stage scripts to expose `run_stage` functions and implement in-memory orchestrator
-- [ ] 04-02: Register `console_scripts` in `pyproject.toml` and verify global PATH installation
+- [x] 04-01: Refactor stage scripts to expose `run_stage` functions and implement in-memory orchestrator
+- [x] 04-02: Register `console_scripts` in `pyproject.toml` and verify global PATH installation
 
 ## Progress
 
@@ -89,4 +89,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Sandboxed Code Execution | 3/3 | Completed | 2026-05-19 |
 | 2. Database Persistence & RLM Logging | 4/4 | Completed | 2026-05-19 |
 | 3. Structured CLI Interoperability | 1/1 | Completed | 2026-05-20 |
-| 4. Programmatic Pipeline Orchestration | 0/2 | Active | - |
+| 4. Programmatic Pipeline Orchestration | 2/2 | Completed | 2026-05-20 |
+

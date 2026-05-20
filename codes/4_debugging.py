@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import re
 import sys
@@ -13,7 +14,6 @@ except ImportError:
     from codes.executor import get_executor
 
 load_dotenv()
-
 
 
 def parse_and_apply_changes(responses, debug_dir, save_num=1):
@@ -88,162 +88,103 @@ def parse_and_apply_changes(responses, debug_dir, save_num=1):
                 print(f"ℹ️ {filename}: No modifications applied\n")
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Debug a generated repository given an error log and planning artifacts."
-    )
-    parser.add_argument(
-        "--error_file_name",
-        type=str,
-        required=True,
-        help="Path to a text file containing the execution error message.",
-    )
+def run_stage(config) -> None:
+    # Retrieve configuration dynamically supporting duck typing
+    error_file_name = getattr(config, "error_file_name", getattr(config, "error_file_path", ""))
+    output_dir = getattr(config, "output_dir", "")
+    paper_name = getattr(config, "paper_name", "")
+    output_repo_dir = getattr(config, "output_repo_dir", "")
+    model = getattr(config, "model", getattr(config, "gpt_version", os.environ.get("LLM_MODEL", "MiniMax-M2.7")))
+    save_num = int(getattr(config, "save_num", getattr(config, "debug_save_num", 1)))
+    run_id = int(getattr(config, "run_id", -1))
 
-    # Either provide output_dir directly, or let the script construct it from the dataset style
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        required=True,
-        help=(
-            "Root output directory that contains planning_trajectories.json and the debug directory."
-        ),
-    )
-    parser.add_argument(
-        "--paper_name",
-        type=str,
-        required=True,
-        help="Paper name for output_dir.",
-    )
-    parser.add_argument(
-        "--output_repo_dir",
-        type=str,
-        required=True,
-        help="Path to the directory containing the generated repository code to debug.",
-    )
-    parser.add_argument(
-        "--model",
-        type=str,
-        default=os.environ.get("LLM_MODEL", "MiniMax-M2.7"),
-        help="Chat model used for debugging (overrides LLM_MODEL in .env).",
-    )
-    parser.add_argument(
-        "--save_num",
-        type=int,
-        default=1,
-        required=True,
-        help="Backup index appended as .<save_num>.bak when saving modified files.",
-    )
-    parser.add_argument(
-        "--run_id",
-        type=int,
-        default=-1,
-        help="Run identifier for SQLite tracking",
-    )
-    return parser.parse_args()
+    # Resolve paths
+    output_dir = os.path.abspath(output_dir)
+    debug_dir = os.path.abspath(output_repo_dir)
 
+    # Initialize DB and create/resume run
+    run_id = int(os.environ.get("RUN_ID", run_id))
+    init_db()
+    if run_id == -1:
+        run_id = create_run(paper_name=paper_name, model_used=model, output_dir=output_dir)
 
-args = parse_args()
-# Client is managed dynamically in unified_api_call
-
-# --------------------------------------------------
-# Resolve output_dir and debug_dir
-# --------------------------------------------------
-output_dir = os.path.abspath(args.output_dir)
-debug_dir = os.path.abspath(args.output_repo_dir)
-
-# Initialize DB and create/resume run
-run_id = int(os.environ.get("RUN_ID", args.run_id))
-init_db()
-if run_id == -1:
-    run_id = create_run(paper_name=args.paper_name, model_used=args.model, output_dir=args.output_dir)
-
-# --------------------------------------------------
-# Initial Sandboxed Execution Check
-# --------------------------------------------------
-executor = get_executor()
-reproduce_path = os.path.join(debug_dir, "reproduce.sh")
-if os.path.exists(reproduce_path):
-    cmd = ["bash", "reproduce.sh"]
-else:
-    cmd = ["python", "main.py"]
-
-print(f"[debugging] Running initial sandboxed execution check in {debug_dir} using cmd: {cmd}...")
-initial_res = executor.run(cmd, cwd=debug_dir)
-
-# Log initial execution check trial
-write_execution_trial(
-    run_id,
-    args.save_num * 2 - 1,
-    stdout=initial_res.stdout,
-    stderr=initial_res.stderr,
-    returncode=initial_res.returncode,
-    timed_out=initial_res.timed_out,
-    elapsed_seconds=initial_res.elapsed_seconds,
-    code_dir=debug_dir,
-)
-
-if initial_res.success:
-    print("✅ Sandbox execution check succeeded! No errors found. Skipping LLM debugging.")
-    complete_run(run_id, status="completed")
-    sys.exit(0)
-
-print(f"❌ Sandbox execution check failed with returncode {initial_res.returncode}. Proceeding to LLM debug.")
-execution_error_msg = initial_res.stderr if initial_res.stderr.strip() else initial_res.stdout
-if not execution_error_msg.strip():
-    if os.path.exists(args.error_file_name):
-        print("[debugging] Sandbox execution error message was empty. Falling back to static error file.")
-        with open(args.error_file_name, "r", encoding="utf-8") as f:
-            execution_error_msg = f.read()
+    # Initial Sandboxed Execution Check
+    executor = get_executor()
+    reproduce_path = os.path.join(debug_dir, "reproduce.sh")
+    if os.path.exists(reproduce_path):
+        cmd = ["bash", "reproduce.sh"]
     else:
-        execution_error_msg = "Unknown execution error."
+        cmd = ["python", "main.py"]
 
-# --------------------------------------------------
-# Load planning trajectories and task list
-# --------------------------------------------------
-planning_traj_path = os.path.join(output_dir, "planning_trajectories.json")
-if not os.path.exists(planning_traj_path):
-    print(f"❌ Planning trajectories not found: {planning_traj_path}", file=sys.stderr)
-    sys.exit(1)
+    print(f"[debugging] Running initial sandboxed execution check in {debug_dir} using cmd: {cmd}...")
+    initial_res = executor.run(cmd, cwd=debug_dir)
 
-context_lst = extract_planning(planning_traj_path)
-# context_lst indices: 0 overview, 1 detailed, 2 PRD (per your original comment)
+    # Log initial execution check trial
+    write_execution_trial(
+        run_id,
+        save_num * 2 - 1,
+        stdout=initial_res.stdout,
+        stderr=initial_res.stderr,
+        returncode=initial_res.returncode,
+        timed_out=initial_res.timed_out,
+        elapsed_seconds=initial_res.elapsed_seconds,
+        code_dir=debug_dir,
+    )
 
-task_list = content_to_json(context_lst[2])
-todo_file_lst = task_list.get("Task list", [])
+    if initial_res.success:
+        print("✅ Sandbox execution check succeeded! No errors found. Skipping LLM debugging.")
+        complete_run(run_id, status="completed")
+        return
 
-# --------------------------------------------------
-# Load repo files and configuration files
-# --------------------------------------------------
-python_dict = read_python_files(debug_dir)
+    print(f"❌ Sandbox execution check failed with returncode {initial_res.returncode}. Proceeding to LLM debug.")
+    execution_error_msg = initial_res.stderr if initial_res.stderr.strip() else initial_res.stdout
+    if not execution_error_msg.strip():
+        if os.path.exists(error_file_name):
+            print("[debugging] Sandbox execution error message was empty. Falling back to static error file.")
+            with open(error_file_name, "r", encoding="utf-8") as f:
+                execution_error_msg = f.read()
+        else:
+            execution_error_msg = "Unknown execution error."
 
-codes = ""
-for todo_file in todo_file_lst:
-    if todo_file.endswith(".yaml"):
-        continue
-    if todo_file not in python_dict:
-        print(f"⚠️ {todo_file} not found in python_dict. Skipping.")
-        continue
-    codes += f"```python\n## File name: {todo_file}\n{python_dict[todo_file]}\n```\n\n"
+    # Load planning trajectories and task list
+    planning_traj_path = os.path.join(output_dir, "planning_trajectories.json")
+    if not os.path.exists(planning_traj_path):
+        print(f"❌ Planning trajectories not found: {planning_traj_path}", file=sys.stderr)
+        raise FileNotFoundError(f"Planning trajectories not found: {planning_traj_path}")
 
-config_path = os.path.join(debug_dir, "config.yaml")
-if os.path.exists(config_path):
-    with open(config_path, "r", encoding="utf-8") as f:
-        config_yaml = f.read()
-    codes += f"```yaml\n## File name: config.yaml\n{config_yaml}\n```\n\n"
+    context_lst = extract_planning(planning_traj_path)
+    task_list = content_to_json(context_lst[2])
+    todo_file_lst = task_list.get("Task list", [])
 
-reproduce_path = os.path.join(debug_dir, "reproduce.sh")
-if os.path.exists(reproduce_path):
-    with open(reproduce_path, "r", encoding="utf-8") as f:
-        reproduce_sh = f.read()
-    codes += f"```bash\n## File name: reproduce.sh\n{reproduce_sh}\n```\n\n"
+    # Load repo files and configuration files
+    python_dict = read_python_files(debug_dir)
 
-# --------------------------------------------------
-# Build debugging prompt
-# --------------------------------------------------
-msg = [
-    {
-        "role": "system",
-        "content": """You are a highly capable code assistant specializing in debugging real-world code repositories. You will be provided with:
+    codes = ""
+    for todo_file in todo_file_lst:
+        if todo_file.endswith(".yaml"):
+            continue
+        if todo_file not in python_dict:
+            print(f"⚠️ {todo_file} not found in python_dict. Skipping.")
+            continue
+        codes += f"```python\n## File name: {todo_file}\n{python_dict[todo_file]}\n```\n\n"
+
+    config_path = os.path.join(debug_dir, "config.yaml")
+    if os.path.exists(config_path):
+        with open(config_path, "r", encoding="utf-8") as f:
+            config_yaml = f.read()
+        codes += f"```yaml\n## File name: config.yaml\n{config_yaml}\n```\n\n"
+
+    reproduce_path = os.path.join(debug_dir, "reproduce.sh")
+    if os.path.exists(reproduce_path):
+        with open(reproduce_path, "r", encoding="utf-8") as f:
+            reproduce_sh = f.read()
+        codes += f"```bash\n## File name: reproduce.sh\n{reproduce_sh}\n```\n\n"
+
+    # Build debugging prompt
+    msg = [
+        {
+            "role": "system",
+            "content": """You are a highly capable code assistant specializing in debugging real-world code repositories. You will be provided with:
 (1) a code repository (in part or in full), and
 (2) one or more execution error messages generated during the execution of the repository.
 
@@ -270,10 +211,10 @@ Constraints:
 - Prioritize minimal and effective fixes that preserve the original intent of the code.
 - Maintain the coding style and structure used in the original repository unless refactoring is necessary for correctness.
 """,
-    },
-    {
-        "role": "user",
-        "content": f"""
+        },
+        {
+            "role": "user",
+            "content": f"""
 ### Code Repository
 {codes}
 
@@ -301,61 +242,117 @@ result = model(input_data)
 
 ## Answer
 """,
-    },
-]
-reasoning_effort = os.environ.get("LLM_REASONING_EFFORT")
-response = unified_api_call(
-    messages=msg,
-    gpt_version=args.model,
-    temperature=float(os.environ.get("LLM_TEMPERATURE", "0.5")) if not reasoning_effort else None,
-    reasoning_effort=reasoning_effort,
-)
+        },
+    ]
+    reasoning_effort = os.environ.get("LLM_REASONING_EFFORT")
+    response = unified_api_call(
+        messages=msg,
+        gpt_version=model,
+        temperature=float(os.environ.get("LLM_TEMPERATURE", "0.5")) if not reasoning_effort else None,
+        reasoning_effort=reasoning_effort,
+    )
 
-answer = response.choices[0].message.content
-# print("===== RAW MODEL ANSWER =====")
-# print(answer)
+    answer = response.choices[0].message.content
 
-# Log LLM debug call to DB
-completion_json = json.loads(response.model_dump_json())
-usage = cal_cost(completion_json, args.model)
-write_stage_result(
-    run_id=run_id,
-    stage_name=f"debugging:save_{args.save_num}",
-    success=True,
-    tokens_in=usage["actual_input_tokens"],
-    tokens_out=usage["output_tokens"],
-    cost_usd=usage["total_cost"],
-    output_path=f"{output_dir}/debugging_response_save_{args.save_num}.json",
-    messages=msg,
-    model_used=args.model,
-)
+    # Log LLM debug call to DB
+    completion_json = json.loads(response.model_dump_json())
+    usage = cal_cost(completion_json, model)
+    write_stage_result(
+        run_id=run_id,
+        stage_name=f"debugging:save_{save_num}",
+        success=True,
+        tokens_in=usage["actual_input_tokens"],
+        tokens_out=usage["output_tokens"],
+        cost_usd=usage["total_cost"],
+        output_path=f"{output_dir}/debugging_response_save_{save_num}.json",
+        messages=msg,
+        model_used=model,
+    )
 
-# Use the direct API response as input to the patch applier
-responses = [answer]
-parse_and_apply_changes(responses, debug_dir, save_num=args.save_num)
+    # Use the direct API response as input to the patch applier
+    responses = [answer]
+    parse_and_apply_changes(responses, debug_dir, save_num=save_num)
 
-# Post-patch verification sandboxed execution run
-print(f"[debugging] Running verification sandboxed execution in {debug_dir} using cmd: {cmd}...")
-post_res = executor.run(cmd, cwd=debug_dir)
+    # Post-patch verification sandboxed execution run
+    print(f"[debugging] Running verification sandboxed execution in {debug_dir} using cmd: {cmd}...")
+    post_res = executor.run(cmd, cwd=debug_dir)
 
-# Log verification check trial
-write_execution_trial(
-    run_id,
-    args.save_num * 2,
-    stdout=post_res.stdout,
-    stderr=post_res.stderr,
-    returncode=post_res.returncode,
-    timed_out=post_res.timed_out,
-    elapsed_seconds=post_res.elapsed_seconds,
-    code_dir=debug_dir,
-)
+    # Log verification check trial
+    write_execution_trial(
+        run_id,
+        save_num * 2,
+        stdout=post_res.stdout,
+        stderr=post_res.stderr,
+        returncode=post_res.returncode,
+        timed_out=post_res.timed_out,
+        elapsed_seconds=post_res.elapsed_seconds,
+        code_dir=debug_dir,
+    )
 
-if post_res.success:
-    print("✅ Sandbox verification check succeeded! Patches resolved all execution issues.")
-    complete_run(run_id, status="completed")
-else:
-    print(f"❌ Sandbox verification check failed with returncode {post_res.returncode}.")
-    print(f"Stdout:\n{post_res.stdout}")
-    print(f"Stderr:\n{post_res.stderr}")
-    complete_run(run_id, status="failed")
-    sys.exit(1)
+    if post_res.success:
+        print("✅ Sandbox verification check succeeded! Patches resolved all execution issues.")
+        complete_run(run_id, status="completed")
+    else:
+        print(f"❌ Sandbox verification check failed with returncode {post_res.returncode}.")
+        print(f"Stdout:\n{post_res.stdout}")
+        print(f"Stderr:\n{post_res.stderr}")
+        complete_run(run_id, status="failed")
+        raise RuntimeError(f"Sandbox verification check failed with returncode {post_res.returncode}")
+
+
+if __name__ == "__main__":
+    def parse_args() -> argparse.Namespace:
+        parser = argparse.ArgumentParser(
+            description="Debug a generated repository given an error log and planning artifacts."
+        )
+        parser.add_argument(
+            "--error_file_name",
+            type=str,
+            required=True,
+            help="Path to a text file containing the execution error message.",
+        )
+        parser.add_argument(
+            "--output_dir",
+            type=str,
+            required=True,
+            help="Root output directory that contains planning_trajectories.json and the debug directory.",
+        )
+        parser.add_argument(
+            "--paper_name",
+            type=str,
+            required=True,
+            help="Paper name for output_dir.",
+        )
+        parser.add_argument(
+            "--output_repo_dir",
+            type=str,
+            required=True,
+            help="Path to the directory containing the generated repository code to debug.",
+        )
+        parser.add_argument(
+            "--model",
+            type=str,
+            default=os.environ.get("LLM_MODEL", "MiniMax-M2.7"),
+            help="Chat model used for debugging (overrides LLM_MODEL in .env).",
+        )
+        parser.add_argument(
+            "--save_num",
+            type=int,
+            default=1,
+            required=True,
+            help="Backup index appended as .<save_num>.bak when saving modified files.",
+        )
+        parser.add_argument(
+            "--run_id",
+            type=int,
+            default=-1,
+            help="Run identifier for SQLite tracking",
+        )
+        return parser.parse_args()
+
+    args = parse_args()
+    try:
+        run_stage(args)
+    except Exception as e:
+        print(f"❌ Debugging stage failed: {e}")
+        sys.exit(1)

@@ -21,90 +21,73 @@ from db import init_db, create_run, write_stage_result, complete_run
 load_dotenv()
 
 
+def run_stage(config) -> None:
+    # Retrieve configuration dynamically supporting duck typing
+    paper_name = getattr(config, "paper_name", None)
+    gpt_version = getattr(config, "gpt_version", getattr(config, "model", "MiniMax-M2.7"))
+    paper_format = getattr(config, "paper_format", "JSON")
+    pdf_json_path = getattr(config, "pdf_json_path", None)
+    pdf_latex_path = getattr(config, "pdf_latex_path", None)
+    output_dir = getattr(config, "output_dir", "")
+    run_id = int(getattr(config, "run_id", -1))
 
-parser = argparse.ArgumentParser()
+    # Initialize DB and create/resume run
+    run_id = int(os.environ.get("RUN_ID", run_id))
+    init_db()
+    if run_id == -1:
+        run_id = create_run(paper_name=paper_name, model_used=gpt_version, output_dir=output_dir)
 
-parser.add_argument("--paper_name", type=str)
-parser.add_argument(
-    "--gpt_version", type=str, default=os.environ.get("LLM_MODEL", "MiniMax-M2.7")
-)
-parser.add_argument(
-    "--paper_format", type=str, default="JSON", choices=["JSON", "LaTeX"]
-)
-parser.add_argument("--pdf_json_path", type=str)  # json format
-parser.add_argument("--pdf_latex_path", type=str)  # latex format
-parser.add_argument("--output_dir", type=str, default="")
-parser.add_argument("--run_id", type=int, default=-1)
+    if paper_format == "JSON":
+        with open(f"{pdf_json_path}") as f:
+            paper_content = json.load(f)
+    elif paper_format == "LaTeX":
+        with open(f"{pdf_latex_path}") as f:
+            paper_content = f.read()
+    else:
+        print("[ERROR] Invalid paper format. Please select either 'JSON' or 'LaTeX.")
+        sys.exit(0)
 
-args = parser.parse_args()
+    with open(f"{output_dir}/planning_config.yaml") as f:
+        config_yaml = f.read()
 
-# Initialize DB and create/resume run
-run_id = int(os.environ.get("RUN_ID", args.run_id))
-init_db()
-if run_id == -1:
-    run_id = create_run(paper_name=args.paper_name, model_used=args.gpt_version, output_dir=args.output_dir)
+    context_lst = extract_planning(f"{output_dir}/planning_trajectories.json")
 
-# Client is managed dynamically in unified_api_call
+    # 0: overview, 1: detailed, 2: PRD
+    if os.path.exists(f"{output_dir}/task_list.json"):
+        with open(f"{output_dir}/task_list.json") as f:
+            task_list = json.load(f)
+    else:
+        task_list = content_to_json(context_lst[2])
 
-paper_name = args.paper_name
-gpt_version = args.gpt_version
-paper_format = args.paper_format
-pdf_json_path = args.pdf_json_path
-pdf_latex_path = args.pdf_latex_path
-output_dir = args.output_dir
+    if "Task list" in task_list:
+        todo_file_lst = task_list["Task list"]
+    elif "task_list" in task_list:
+        todo_file_lst = task_list["task_list"]
+    elif "task list" in task_list:
+        todo_file_lst = task_list["task list"]
+    else:
+        print("[ERROR] 'Task list' does not exist. Please re-generate the planning.")
+        sys.exit(0)
 
-if paper_format == "JSON":
-    with open(f"{pdf_json_path}") as f:
-        paper_content = json.load(f)
-elif paper_format == "LaTeX":
-    with open(f"{pdf_latex_path}") as f:
-        paper_content = f.read()
-else:
-    print("[ERROR] Invalid paper format. Please select either 'JSON' or 'LaTeX.")
-    sys.exit(0)
+    if "Logic Analysis" in task_list:
+        logic_analysis = task_list["Logic Analysis"]
+    elif "logic_analysis" in task_list:
+        logic_analysis = task_list["logic_analysis"]
+    elif "logic analysis" in task_list:
+        logic_analysis = task_list["logic analysis"]
+    else:
+        print("[ERROR] 'Logic Analysis' does not exist. Please re-generate the planning.")
+        sys.exit(0)
 
+    done_file_lst = ["config.yaml"]
+    logic_analysis_dict = {}
+    for desc in task_list["Logic Analysis"]:
+        logic_analysis_dict[desc[0]] = desc[1]
 
-with open(f"{output_dir}/planning_config.yaml") as f:
-    config_yaml = f.read()
-
-context_lst = extract_planning(f"{output_dir}/planning_trajectories.json")
-
-# 0: overview, 1: detailed, 2: PRD
-if os.path.exists(f"{output_dir}/task_list.json"):
-    with open(f"{output_dir}/task_list.json") as f:
-        task_list = json.load(f)
-else:
-    task_list = content_to_json(context_lst[2])
-
-if "Task list" in task_list:
-    todo_file_lst = task_list["Task list"]
-elif "task_list" in task_list:
-    todo_file_lst = task_list["task_list"]
-elif "task list" in task_list:
-    todo_file_lst = task_list["task list"]
-else:
-    print("[ERROR] 'Task list' does not exist. Please re-generate the planning.")
-    sys.exit(0)
-
-if "Logic Analysis" in task_list:
-    logic_analysis = task_list["Logic Analysis"]
-elif "logic_analysis" in task_list:
-    logic_analysis = task_list["logic_analysis"]
-elif "logic analysis" in task_list:
-    logic_analysis = task_list["logic analysis"]
-else:
-    print("[ERROR] 'Logic Analysis' does not exist. Please re-generate the planning.")
-    sys.exit(0)
-
-done_file_lst = ["config.yaml"]
-logic_analysis_dict = {}
-for desc in task_list["Logic Analysis"]:
-    logic_analysis_dict[desc[0]] = desc[1]
-
-analysis_msg = [
-    {
-        "role": "system",
-        "content": f"""You are an expert researcher, strategic analyzer and software engineer with a deep understanding of experimental design and reproducibility in scientific research.
+    analysis_msg = [
+        {
+            "role": "system",
+            "content": f"""You are an expert researcher, strategic analyzer and software engineer with a deep understanding of experimental design and reproducibility in scientific research.
 You will receive a research paper in {paper_format} format, an overview of the plan, a design in JSON format consisting of "Implementation approach", "File list", "Data structures and interfaces", and "Program call flow", followed by a task in JSON format that includes "Required packages", "Required other language third-party packages", "Logic Analysis", and "Task list", along with a configuration file named "config.yaml".
 
 Your task is to conduct a comprehensive logic analysis to accurately reproduce the experiments and methodologies described in the research paper.
@@ -117,20 +100,18 @@ This analysis must align precisely with the paper’s methodology, experimental 
 5. REFER TO CONFIGURATION: Always reference settings from the config.yaml file. Do not invent or assume any values—only use configurations explicitly provided.
 
 """,
-    }
-]
+        }
+    ]
 
+    def get_write_msg(todo_file_name, todo_file_desc):
+        draft_desc = f"Write the logic analysis in '{todo_file_name}', which is intended for '{todo_file_desc}'."
+        if len(todo_file_desc.strip()) == 0:
+            draft_desc = f"Write the logic analysis in '{todo_file_name}'."
 
-def get_write_msg(todo_file_name, todo_file_desc):
-
-    draft_desc = f"Write the logic analysis in '{todo_file_name}', which is intended for '{todo_file_desc}'."
-    if len(todo_file_desc.strip()) == 0:
-        draft_desc = f"Write the logic analysis in '{todo_file_name}'."
-
-    write_msg = [
-        {
-            "role": "user",
-            "content": f"""## Paper
+        write_msg = [
+            {
+                "role": "user",
+                "content": f"""## Paper
 {paper_content}
 
 -----
@@ -165,87 +146,101 @@ You DON'T need to provide the actual code yet; focus on a thorough, clear analys
 -----
 
 ## Logic Analysis: {todo_file_name}""",
-        }
-    ]
-    return write_msg
+            }
+        ]
+        return write_msg
+
+    def api_call(msg):
+        return unified_api_call(
+            messages=msg,
+            gpt_version=gpt_version,
+            temperature=float(os.environ.get("LLM_TEMPERATURE", "0.5")),
+            reasoning_effort=os.environ.get("LLM_REASONING_EFFORT"),
+        )
+
+    artifact_output_dir = f"{output_dir}/analyzing_artifacts"
+    os.makedirs(artifact_output_dir, exist_ok=True)
+
+    total_accumulated_cost = load_accumulated_cost(f"{output_dir}/accumulated_cost.json")
+    for todo_file_name in tqdm(todo_file_lst):
+        responses = []
+        trajectories = copy.deepcopy(analysis_msg)
+
+        current_stage = f"[ANALYSIS] {todo_file_name}"
+        print(current_stage)
+        if todo_file_name == "config.yaml":
+            continue
+
+        if todo_file_name not in logic_analysis_dict:
+            logic_analysis_dict[todo_file_name] = ""
+
+        instruction_msg = get_write_msg(todo_file_name, logic_analysis_dict[todo_file_name])
+        trajectories.extend(instruction_msg)
+
+        completion = api_call(trajectories)
+
+        # response
+        completion_json = json.loads(completion.model_dump_json())
+        responses.append(completion_json)
+
+        # trajectories
+        message = completion.choices[0].message
+        trajectories.append({"role": message.role, "content": message.content})
+
+        # print and logging
+        print_response(completion_json)
+        temp_total_accumulated_cost = print_log_cost(
+            completion_json, gpt_version, current_stage, output_dir, total_accumulated_cost
+        )
+        total_accumulated_cost = temp_total_accumulated_cost
+
+        # Write stage result to DB after each LLM call
+        usage = cal_cost(completion_json, gpt_version)
+        write_stage_result(
+            run_id,
+            f"analyzing:{todo_file_name}",
+            success=True,
+            tokens_in=usage["actual_input_tokens"],
+            tokens_out=usage["output_tokens"],
+            cost_usd=usage["total_cost"],
+            output_path=f"{artifact_output_dir}/{todo_file_name}_simple_analysis.txt",
+            messages=trajectories,
+            model_used=gpt_version,
+        )
+
+        # save
+        with open(f"{artifact_output_dir}/{todo_file_name}_simple_analysis.txt", "w") as f:
+            f.write(completion_json["choices"][0]["message"]["content"])
+
+        done_file_lst.append(todo_file_name)
+
+        # save for next stage(coding)
+        todo_file_name_replaced = todo_file_name.replace("/", "_")
+        with open(f"{output_dir}/{todo_file_name_replaced}_simple_analysis_response.json", "w") as f:
+            json.dump(responses, f)
+
+        with open(
+            f"{output_dir}/{todo_file_name_replaced}_simple_analysis_trajectories.json", "w"
+        ) as f:
+            json.dump(trajectories, f)
+
+    save_accumulated_cost(f"{output_dir}/accumulated_cost.json", total_accumulated_cost)
+    complete_run(run_id, status="completed")
 
 
-def api_call(msg):
-    return unified_api_call(
-        messages=msg,
-        gpt_version=gpt_version,
-        temperature=float(os.environ.get("LLM_TEMPERATURE", "0.5")),
-        reasoning_effort=os.environ.get("LLM_REASONING_EFFORT"),
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--paper_name", type=str)
+    parser.add_argument(
+        "--gpt_version", type=str, default=os.environ.get("LLM_MODEL", "MiniMax-M2.7")
     )
-
-
-artifact_output_dir = f"{output_dir}/analyzing_artifacts"
-os.makedirs(artifact_output_dir, exist_ok=True)
-
-total_accumulated_cost = load_accumulated_cost(f"{output_dir}/accumulated_cost.json")
-for todo_file_name in tqdm(todo_file_lst):
-    responses = []
-    trajectories = copy.deepcopy(analysis_msg)
-
-    current_stage = f"[ANALYSIS] {todo_file_name}"
-    print(current_stage)
-    if todo_file_name == "config.yaml":
-        continue
-
-    if todo_file_name not in logic_analysis_dict:
-        # print(f"[DEBUG ANALYSIS] {paper_name} {todo_file_name} is not exist in the logic analysis")
-        logic_analysis_dict[todo_file_name] = ""
-
-    instruction_msg = get_write_msg(todo_file_name, logic_analysis_dict[todo_file_name])
-    trajectories.extend(instruction_msg)
-
-    completion = api_call(trajectories)
-
-    # response
-    completion_json = json.loads(completion.model_dump_json())
-    responses.append(completion_json)
-
-    # trajectories
-    message = completion.choices[0].message
-    trajectories.append({"role": message.role, "content": message.content})
-
-    # print and logging
-    print_response(completion_json)
-    temp_total_accumulated_cost = print_log_cost(
-        completion_json, gpt_version, current_stage, output_dir, total_accumulated_cost
+    parser.add_argument(
+        "--paper_format", type=str, default="JSON", choices=["JSON", "LaTeX"]
     )
-    total_accumulated_cost = temp_total_accumulated_cost
+    parser.add_argument("--pdf_json_path", type=str)  # json format
+    parser.add_argument("--pdf_latex_path", type=str)  # latex format
+    parser.add_argument("--output_dir", type=str, default="")
+    parser.add_argument("--run_id", type=int, default=-1)
 
-    # Write stage result to DB after each LLM call
-    usage = cal_cost(completion_json, gpt_version)
-    write_stage_result(
-        run_id,
-        f"analyzing:{todo_file_name}",
-        success=True,
-        tokens_in=usage["actual_input_tokens"],
-        tokens_out=usage["output_tokens"],
-        cost_usd=usage["total_cost"],
-        output_path=f"{artifact_output_dir}/{todo_file_name}_simple_analysis.txt",
-        messages=trajectories,
-        model_used=gpt_version,
-    )
-
-    # save
-    with open(f"{artifact_output_dir}/{todo_file_name}_simple_analysis.txt", "w") as f:
-        f.write(completion_json["choices"][0]["message"]["content"])
-
-    done_file_lst.append(todo_file_name)
-
-    # save for next stage(coding)
-    todo_file_name = todo_file_name.replace("/", "_")
-    with open(f"{output_dir}/{todo_file_name}_simple_analysis_response.json", "w") as f:
-        json.dump(responses, f)
-
-    with open(
-        f"{output_dir}/{todo_file_name}_simple_analysis_trajectories.json", "w"
-    ) as f:
-        json.dump(trajectories, f)
-
-save_accumulated_cost(f"{output_dir}/accumulated_cost.json", total_accumulated_cost)
-
-complete_run(run_id, status="completed")
+    args = parser.parse_args()
+    run_stage(args)
