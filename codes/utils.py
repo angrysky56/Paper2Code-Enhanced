@@ -644,13 +644,13 @@ def unified_api_call(messages, gpt_version, temperature=0.5, reasoning_effort=No
 
     if use_anthropic:
         api_key = (
-            os.environ.get("ANTHROPIC_API_KEY")
-            or os.environ.get("LLM_API_KEY")
+            os.environ.get("LLM_API_KEY")
+            or os.environ.get("ANTHROPIC_API_KEY")
             or os.environ.get("OPENAI_API_KEY")
         )
         base_url = (
-            os.environ.get("ANTHROPIC_BASE_URL")
-            or os.environ.get("LLM_BASE_URL")
+            os.environ.get("LLM_BASE_URL")
+            or os.environ.get("ANTHROPIC_BASE_URL")
             or "https://api.minimax.io/anthropic"
         )
 
