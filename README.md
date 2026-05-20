@@ -23,8 +23,8 @@ Our method outperforms strong baselines on both Paper2Code and PaperBench and pr
 
 ## ⚡ Quick Start
 
-- Note: The following command runs example paper ([Attention Is All You Need](https://arxiv.org/abs/1706.03762)).
-- For more setup options, including LaTeX-based inputs and PDF-to-JSON conversion, see [📚 Detailed Setup Instructions](#-detailed-setup-instructions).
+- **Note**: The following command runs the example paper ([Attention Is All You Need](https://arxiv.org/abs/1706.03762)).
+- For more setup options, including direct PDF ingestion, LaTeX-based inputs, and visual OCR conversion, see [📚 Detailed Setup Instructions](#-detailed-setup-instructions).
 
 ### Using `uv` (Recommended)
 
@@ -34,41 +34,68 @@ This repository is managed as a `uv` project. `uv` ensures reproducible virtual 
 # 1. Install uv (if you haven't already)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 2. Sync virtual environment and install all dependencies (including Anthropic SDK)
+# 2. Sync virtual environment and install all dependencies (including Anthropic and OpenAI SDKs)
 uv sync
 
-# 3. Configure environment variables (e.g. OpenAI or MiniMax)
-export LLM_API_KEY="your-api-key"
-export LLM_MODEL="MiniMax-M2.7"
+# 3. Copy the environment configuration template
+cp .env.example .env
 
-# 4. Run PaperCoder
+# 4. Fill in your preferred model settings in `.env` (MiniMax M2.7, OpenRouter, OpenAI, or local Ollama)
+# Open .env and set your LLM_API_KEY, LLM_MODEL, and LLM_BASE_URL.
+
+# 5. Run PaperCoder
 cd scripts
 uv run bash run.sh
 ```
 
-### Using MiniMax M2.7 (Anthropic SDK Integration)
+> [!TIP]
+> All Python scripts in this pipeline automatically load environment variables from the `.env` file in the root directory via `python-dotenv`. You don't need to manually export variables in your shell!
 
-The pipeline is fully optimized for **MiniMax M2.7** using the Anthropic SDK. This captures the model's advanced **thinking/reasoning blocks** natively.
+### 🌐 Unified Model & Provider Setup
 
-To configure:
+Paper2Code uses a unified, OpenAI-compatible client wrapper that works with almost all major LLM providers. 
 
-```bash
-# Configure your MiniMax API Key and set the model
-export ANTHROPIC_API_KEY="your_minimax_api_key"
-export LLM_MODEL="MiniMax-M2.7"
+To configure a provider, uncomment and fill in the corresponding block in your `.env` file:
 
-# (Optional) International Endpoint (default)
-export ANTHROPIC_BASE_URL="https://api.minimax.io/anthropic"
+> [!NOTE]
+> **Thinking/Reasoning Blocks Support**: The pipeline natively supports models with advanced thinking blocks (e.g., MiniMax M2.7). If the model name contains `minimax` and the `anthropic` Python package is installed (default via `uv sync`), the pipeline automatically uses the Anthropic SDK client wrapper under the hood to capture these reasoning steps perfectly!
+
+#### 🚀 Option A: MiniMax M2.7 (Recommended for Reasoning)
+```env
+LLM_API_KEY=your_minimax_api_key_here
+LLM_BASE_URL=https://api.minimax.io/anthropic
+LLM_MODEL=MiniMax-M2.7
+```
+
+#### 🔗 Option B: OpenRouter
+```env
+LLM_API_KEY=your_openrouter_api_key_here
+LLM_BASE_URL=https://openrouter.ai/api/v1
+LLM_MODEL=minimax/minimax-m1-40k
+```
+
+#### 🏠 Option C: Ollama (Local / Offline)
+```env
+LLM_API_KEY=ollama
+LLM_BASE_URL=http://localhost:11434/v1
+LLM_MODEL=llama3.2
+```
+
+#### 🟢 Option D: OpenAI
+```env
+LLM_API_KEY=your_openai_api_key_here
+LLM_BASE_URL=
+LLM_MODEL=gpt-4o
+# LLM_REASONING_EFFORT=medium  # Set to low, medium, or high for OpenAI o-series models (e.g. o3-mini)
 ```
 
 ### Legacy Pip Installation
 
-If you prefer using traditional virtual environments and `pip`:
+If you prefer using traditional virtual environments and standard `pip`:
 
 ```bash
 pip install -r requirements.txt
-export OPENAI_API_KEY="<OPENAI_API_KEY>"
-
+cp .env.example .env  # configure your .env file
 cd scripts
 bash run.sh
 ```
@@ -104,34 +131,34 @@ uv sync
 pip install -r requirements.txt
 ```
 
-### 📄 (Option) Convert PDF to JSON
+### 📄 Modernized PDF Ingestion & OCR
 
-The following process describes how to convert a paper PDF into JSON format.
-If you have access to the LaTeX source and plan to use it with PaperCoder, you may skip this step and proceed to [🚀 Running PaperCoder](#-running-papercoder).
-Note: In our experiments, we converted all paper PDFs to JSON format.
+Paper2Code features a powerful, direct PDF ingestion layer that bypasses the legacy Java-based `s2orc-doc2json` pipeline. It supports offline parsing, API-driven Vision-Language Model structure refinement, and high-fidelity visual OCR.
 
-1. Clone the `s2orc-doc2json` repository to convert your PDF file into a structured JSON format.
-   (For detailed configuration, please refer to the [official repository](https://github.com/allenai/s2orc-doc2json).)
+To ingest and clean any academic PDF, run the following:
 
 ```bash
-git clone https://github.com/allenai/s2orc-doc2json.git
+python codes/0_pdf_process.py \
+    --input_json_path path/to/paper.pdf \
+    --output_json_path path/to/output_cleaned.json \
+    --mode auto
 ```
 
-2. Run the PDF processing service.
+#### Ingestion Modes (`--mode`):
+
+*   **`auto` (Default)**: Automatically detects if an API key is available. If so, uses **VLM refinement** for maximum structure accuracy. If not, falls back to **local extraction**.
+*   **`vlm`**: Leverages Vision-Language Models (configured via `.env`) to process raw extracted text, automatically converting complex math equations to native **LaTeX** ($...$ or $$...$$) and tables to clean Markdown format while preserving exact scientific details.
+*   **`local`**: Zero-dependency local text extractor utilizing `pypdf`. Safe, completely offline, and extremely fast.
+*   **`olmocr`**: A wrapper for Allen Institute for AI's visual-centric **olmOCR** pipeline (`python -m olmocr.pipeline`) if installed.
+
+#### Legacy Grobid JSON Support:
+
+If you already have a structured JSON produced by legacy Grobid/`s2orc-doc2json`, you can process and clean it using the same script:
 
 ```bash
-cd ./s2orc-doc2json/grobid-0.7.3
-./gradlew run
-```
-
-3. Convert your PDF into JSON format.
-
-```bash
-mkdir -p ./s2orc-doc2json/output_dir/paper_coder
-python ./s2orc-doc2json/doc2json/grobid2json/process_pdf.py \
-    -i ${PDF_PATH} \
-    -t ./s2orc-doc2json/temp_dir/ \
-    -o ./s2orc-doc2json/output_dir/paper_coder
+python codes/0_pdf_process.py \
+    --input_json_path path/to/grobid_paper.json \
+    --output_json_path path/to/output_cleaned.json
 ```
 
 ### 🚀 Running PaperCoder
@@ -139,22 +166,19 @@ python ./s2orc-doc2json/doc2json/grobid2json/process_pdf.py \
 - Note: The following command runs example paper ([Attention Is All You Need](https://arxiv.org/abs/1706.03762)).
   If you want to run PaperCoder on your own paper, please modify the environment variables accordingly.
 
-#### Using OpenAI API
+#### Using the Unified API Client (OpenAI, MiniMax, OpenRouter, etc.)
 
-- 💵 Estimated cost for using o3-mini: $0.50–$0.70
+- 💵 Estimated cost for using reasoning models: $0.50–$0.70
+- **Note**: Ensure you have copied and configured your `.env` file beforehand.
 
 ```bash
 # Using the PDF-based JSON format of the paper
-export OPENAI_API_KEY="<OPENAI_API_KEY>"
-
 cd scripts
 uv run bash run.sh
 ```
 
 ```bash
 # Using the LaTeX source of the paper
-export OPENAI_API_KEY="<OPENAI_API_KEY>"
-
 cd scripts
 uv run bash run_latex.sh
 ```
@@ -196,9 +220,7 @@ uv run bash run_latex_llm.sh
 
 ### 🛠️ Environment Setup
 
-```bash
-export OPENAI_API_KEY="<OPENAI_API_KEY>"
-```
+Ensure your `.env` contains your active provider credentials (such as OpenAI/o3-mini or your preferred provider API keys).
 
 ### 📝 Reference-free Evaluation
 
@@ -277,7 +299,7 @@ To run tests with verbose output:
 python -m pytest tests/ -v
 ```
 
-All 10 unit tests should pass.
+All 18 unit tests should pass.
 
 ### Running Linting
 
